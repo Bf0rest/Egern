@@ -246,7 +246,7 @@ export default async function(ctx) {
     return {
 
       type: 'widget',
-      padding: 4,
+      padding: 2,
       gap: 0,
 
       children: [
@@ -261,8 +261,8 @@ export default async function(ctx) {
             {
               type: 'image',
               src: restoreSvgIcon(riskIcon),
-              width: 26,
-              height: 26,
+              width: 30,
+              height: 30,
               resizeMode: 'cover'
             },
             { type: 'spacer' }
