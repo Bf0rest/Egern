@@ -39,7 +39,6 @@ export default async function(ctx) {
     // 保留旧色用于向后兼容（网络类型等）
     green: '#34D399',
     yellow: '#FACC15',
-    red: '#F87171',
   };
 
   // 垂直空气感渐变配置
