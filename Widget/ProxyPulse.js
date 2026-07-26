@@ -10,9 +10,12 @@
   2. 主界面添加 systemMedium 小组件
   3. Env 说明：
    * - GROUP: 要监控的策略组名称（urltest/smart 组）
+   * - ECHO_URL: 自定义延迟测试 URL，逗号分隔多个 fallback
+   *   （不填默认用 httpbin.org + ipify.org）
+   *   建议用代理出口附近的稳定站点
 *******************************/
 
-const ECHO_URLS = [
+const DEFAULT_ECHO_URLS = [
   'https://httpbin.org/ip',
   'https://api.ipify.org?format=json',
 ];
@@ -98,10 +101,14 @@ function sparklineSVG(arr, switchIndices, { color, fillColor, width, height, lin
 // ── 数据获取 ──────────────────────────────────
 
 async function fetchData(ctx, group) {
+  const urlList = (ctx.env && ctx.env.ECHO_URL)
+    ? ctx.env.ECHO_URL.split(',').map(s => s.trim()).filter(Boolean)
+    : DEFAULT_ECHO_URLS;
+
   const ipOpts = { policy: group, timeout: 8000 };
   let lastError = null;
 
-  for (const url of ECHO_URLS) {
+  for (const url of urlList) {
     try {
       const t0 = Date.now();
       const ipResp = await ctx.http.get(url, ipOpts);
