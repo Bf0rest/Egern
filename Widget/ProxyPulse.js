@@ -1,21 +1,24 @@
 /******************************
   脚本名称: ProxyPulse
-  Version : v1.0.0
+  Version : v1.1.0
   更新时间: 2026-07-27
   平台: Egern（适配 TF 2.20.0 766+）
-  功能: 代理延迟监控 — sparkline + IP 切换标记
+  功能: 代理延迟监控 — 平滑曲线 + IP 切换标记
   作者: @langl
   使用说明:
   1. 添加到 Egern 脚本
   2. 主界面添加 systemMedium 小组件
   3. Env 说明：
    * - GROUP: 要监控的策略组名称（urltest/smart 组）
-   * - ECHO_URL: 自定义延迟测试 URL，逗号分隔多个 fallback
+   * - ECHO_URL: 自定义 IP 检测 URL，逗号分隔多个 fallback
    *   （不填默认用 httpbin.org + ipify.org）
-   *   建议用代理出口附近的稳定站点
+   * - IP_INTERVAL: IP 重新检测间隔（刷新次数，默认 3）
+   *   延迟用 gstatic 每次测，IP 每 N 次刷新查一次
 *******************************/
 
-const DEFAULT_ECHO_URLS = [
+const LATENCY_URL = 'https://www.gstatic.com/generate_204';
+
+const DEFAULT_IP_URLS = [
   'https://httpbin.org/ip',
   'https://api.ipify.org?format=json',
 ];
@@ -46,9 +49,16 @@ function b64(str) {
   return btoa(encoded);
 }
 
-// ── Sparkline SVG 生成 ────────────────────────
+function extractText(resp) {
+  if (typeof resp === 'string') return resp;
+  if (resp && typeof resp.text === 'function') return resp.text();
+  if (resp && resp.body != null) return resp.body;
+  return '';
+}
 
-function sparklineSVG(arr, switchIndices, { color, fillColor, width, height, lineWidth }) {
+// ── Bezier 平滑曲线 SVG ───────────────────────
+
+function sparklineBezierSVG(arr, switchIndices, { color, fillColor, width, height, lineWidth }) {
   const nums = (arr || []).map(Number).filter(Number.isFinite);
   if (nums.length < 2) return null;
 
@@ -65,13 +75,22 @@ function sparklineSVG(arr, switchIndices, { color, fillColor, width, height, lin
     return { x: +x.toFixed(2), y: +y.toFixed(2) };
   });
 
-  // 渐变填充区
   const bottom = height - pad;
+
+  // 渐变填充区（多边形近似，渐变层无需精确曲线）
   const areaPts = points.map(p => `${p.x},${p.y}`).join(' ');
   const area = `${areaPts} ${width - pad},${bottom} ${pad},${bottom}`;
 
-  // 折线
-  const line = points.map(p => `${p.x},${p.y}`).join(' ');
+  // 贝塞尔曲线 — 控制点水平外扩 1/3 段距
+  let pathD = `M ${points[0].x},${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const p0 = points[i - 1];
+    const p1 = points[i];
+    const dx = (p1.x - p0.x) / 3;
+    const cp1x = (p0.x + dx).toFixed(2);
+    const cp2x = (p1.x - dx).toFixed(2);
+    pathD += ` C ${cp1x},${p0.y} ${cp2x},${p1.y} ${p1.x},${p1.y}`;
+  }
 
   // IP 切换标记
   const circles = (switchIndices || [])
@@ -91,7 +110,7 @@ function sparklineSVG(arr, switchIndices, { color, fillColor, width, height, lin
     </linearGradient>
   </defs>
   <polygon points="${area}" fill="url(#pulseFill)"/>
-  <polyline points="${line}" fill="none" stroke="${color}" stroke-width="${lineWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+  <path d="${pathD}" fill="none" stroke="${color}" stroke-width="${lineWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
   ${circles}
 </svg>`;
 
@@ -100,43 +119,69 @@ function sparklineSVG(arr, switchIndices, { color, fillColor, width, height, lin
 
 // ── 数据获取 ──────────────────────────────────
 
-async function fetchData(ctx, group) {
+async function measureLatency(ctx, group) {
+  const t0 = Date.now();
+  await ctx.http.get(LATENCY_URL, { policy: group, timeout: 8000 });
+  return Date.now() - t0;
+}
+
+async function fetchExitIP(ctx, group) {
   const urlList = (ctx.env && ctx.env.ECHO_URL)
     ? ctx.env.ECHO_URL.split(',').map(s => s.trim()).filter(Boolean)
-    : DEFAULT_ECHO_URLS;
+    : DEFAULT_IP_URLS;
 
   const ipOpts = { policy: group, timeout: 8000 };
-  let lastError = null;
 
   for (const url of urlList) {
     try {
-      const t0 = Date.now();
       const ipResp = await ctx.http.get(url, ipOpts);
-      const latency = Date.now() - t0;
+      const raw = await extractText(ipResp);
+      if (!raw || !raw.trim()) continue;
+      const body = JSON.parse(raw);
+      return body.origin || body.ip || 'unknown';
+    } catch (_) {}
+  }
+  return null;
+}
 
-      let textBody;
-      if (typeof ipResp === 'string') {
-        textBody = ipResp;
-      } else if (ipResp && typeof ipResp.text === 'function') {
-        textBody = await ipResp.text();
-      } else if (ipResp && ipResp.body != null) {
-        textBody = ipResp.body;
-      } else {
-        continue;
-      }
+// ── IP 缓存管理 ───────────────────────────────
 
-      if (!textBody || !textBody.trim()) continue;
+const IP_CACHE_KEY = 'proxypulse_ip';
 
-      const body = JSON.parse(textBody);
-      const exitIP = body.origin || body.ip || 'unknown';
+function loadIPCache(ctx) {
+  try {
+    const c = ctx.storage.getJSON(IP_CACHE_KEY);
+    return (c && typeof c.ip === 'string') ? c : { ip: null, counter: 0 };
+  } catch (_) {
+    return { ip: null, counter: 0 };
+  }
+}
 
-      return { exitIP, latency };
-    } catch (e) {
-      lastError = e;
-    }
+function saveIPCache(ctx, cache) {
+  try { ctx.storage.setJSON(IP_CACHE_KEY, cache); } catch (_) {}
+}
+
+async function getExitIP(ctx, group) {
+  const interval = Math.max(1, parseInt((ctx.env || {}).IP_INTERVAL || '3', 10) || 3);
+  const cache = loadIPCache(ctx);
+
+  cache.counter = (cache.counter || 0) + 1;
+
+  // 计数器未到且已有缓存 → 直接复用
+  if (cache.counter <= interval && cache.ip) {
+    saveIPCache(ctx, cache);
+    return cache.ip;
   }
 
-  throw lastError || new Error('所有 IP 检测服务均不可用');
+  // 需要重新检测
+  const ip = await fetchExitIP(ctx, group);
+  if (ip) {
+    cache.ip = ip;
+    cache.counter = 0;
+  }
+  // 即使 fetch 失败也保留旧 IP，重置计数器等下次重试
+  saveIPCache(ctx, cache);
+  return cache.ip || 'unknown';
 }
 
 // ── 历史管理 ──────────────────────────────────
@@ -162,7 +207,7 @@ function addPoint(history, point) {
   const prev = history.length ? history[history.length - 1] : null;
   const switched = prev && prev.exitIP !== point.exitIP;
   const updated = [...history, { ...point, switched }];
-  return updated.slice(-24); // 保留最近 24 条
+  return updated.slice(-24);
 }
 
 // ── Widget 渲染 ───────────────────────────────
@@ -173,7 +218,7 @@ function renderMedium(ctx, history, current) {
     .filter(i => i >= 0);
   const latencies = history.map(p => p.latency);
 
-  const chartSrc = sparklineSVG(latencies, switchIndices, {
+  const chartSrc = sparklineBezierSVG(latencies, switchIndices, {
     color: C.accent,
     fillColor: C.accentFill,
     width: 310,
@@ -182,9 +227,6 @@ function renderMedium(ctx, history, current) {
   });
 
   const switchCount = switchIndices.length;
-  const lastSwitch = switchCount > 0
-    ? history[switchIndices[switchIndices.length - 1]]
-    : null;
 
   return {
     type: 'widget',
@@ -193,7 +235,6 @@ function renderMedium(ctx, history, current) {
     gap: 8,
     backgroundColor: C.bg,
     children: [
-      // Header row: title + current latency
       {
         type: 'stack',
         direction: 'row',
@@ -210,7 +251,6 @@ function renderMedium(ctx, history, current) {
           }),
         ],
       },
-      // Sparkline chart
       chartSrc
         ? {
             type: 'image',
@@ -224,7 +264,6 @@ function renderMedium(ctx, history, current) {
             font: { size: 14 },
             textColor: C.textSecondary,
           }),
-      // Footer: switch count + window
       {
         type: 'stack',
         direction: 'row',
@@ -257,7 +296,10 @@ export default async function (ctx) {
   const group = (ctx.env || {}).GROUP || 'Proxy';
 
   try {
-    const { exitIP, latency } = await fetchData(ctx, group);
+    const [latency, exitIP] = await Promise.all([
+      measureLatency(ctx, group),
+      getExitIP(ctx, group),
+    ]);
 
     let history = loadHistory(ctx);
     history = addPoint(history, { time: Date.now(), latency, exitIP });
