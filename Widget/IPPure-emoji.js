@@ -1,8 +1,4 @@
-// =============================================
-// Egern IPPure Widget V2 - UniFi Protect Style
-// Edition: Studio Solid-Matte with Air-Gradient & Micro Border
-// Risk tiers: IPPure 6-tier (custom labels)
-// =============================================
+// IPPure 6-tier risk labels (优质/良好/普通/低危/中危/高危)
 
 export default async function(ctx) {
 
@@ -12,14 +8,11 @@ export default async function(ctx) {
   const widgetFamily =
     ctx.widgetFamily || 'systemLarge';
 
-  // ==================== Premium Color Palette ====================
 
   const C = {
-    // 顶级的微调空气感黑灰：顶部稍深，底部稍浅，营造极为自然的沉浸感
     bgTop: '#0C0D0F',
     bgBottom: '#141619',
 
-    // 物理微轮廓边框颜色（类似 UniFi 设备的精致外壳边缘）
     borderColor: 'rgba(255, 255, 255, 0.06)',
 
     text: '#F8FAFC',
@@ -36,12 +29,10 @@ export default async function(ctx) {
     risk4: '#F97316',  // 50-70  中危
     risk5: '#DC2626',  // 70-100 高危
 
-    // 保留旧色用于向后兼容（网络类型等）
     green: '#34D399',
     yellow: '#FACC15',
   };
 
-  // 垂直空气感渐变配置
   const premiumGradient = {
     type: 'linear',
     colors: [C.bgTop, C.bgBottom],
@@ -49,7 +40,6 @@ export default async function(ctx) {
     endPoint: { x: 0.5, y: 1 }
   };
 
-  // ==================== Fetch ====================
 
   let data = null;
 
@@ -67,7 +57,6 @@ export default async function(ctx) {
 
   } catch(e) {}
 
-  // ==================== Fallback ====================
 
   if (!data) {
 
@@ -84,7 +73,6 @@ export default async function(ctx) {
 
   }
 
-  // ==================== Risk & Colors (6-tier) ====================
 
   const riskScore =
     Number(data.fraudScore || 0);
@@ -109,7 +97,6 @@ export default async function(ctx) {
     riskColor = C.risk4;
   }
 
-      // Circular widget icon
   const riskIconMap = {
     risk0_house: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMi40NTU4LDIuNDU1OClzY2FsZSgwLjI2NTExNikiPjxwYXRoIGQ9Ik0yLjkyLDExLjU2YTEuMTIsMS4xMiwwLDAsMS0uNTMtLjEyQS40NS40NSwwLDAsMSwyLjE2LDExYS43NS43NSwwLDAsMSwuMjctLjU1TDEwLjIsMi43OGEzLjE4LDMuMTgsMCwwLDEsLjY3LS41NSwxLjMyLDEuMzIsMCwwLDEsMS4yNiwwLDMuMTgsMy4xOCwwLDAsMSwuNjcuNTVsNy43Nyw3LjY4YS43NS43NSwwLDAsMSwuMjcuNTUuNDUuNDUsMCwwLDEtLjIyLjQzLDEuMTMsMS4xMywwLDAsMS0uNTQuMTJIMTguMzJMMTEuNSw0Ljg0LDQuNjgsMTEuNTZabS4zMS0uNjlINC4zOWw3LjExLTcsNy4xMSw3aDEuMTZhLjA3LjA3LDAsMCwwLC4wOC0uMDYuMTMuMTMsMCwwLDAtLjA1LS4xMkwxMi4zLDMuMjhhMy4yNCwzLjI0LDAsMCwwLS40Ny0uNDEuNTUuNTUsMCwwLDAtLjY2LDAsMy4yNCwzLjI0LDAsMCwwLS40Ny40MUwzLjIsMTAuNjlhLjEzLjEzLDAsMCwwLS4wNS4xMkEuMDcuMDcsMCwwLDAsMy4yMywxMC44N1ptMy4xLDguMjNINS44NGwtLjQ1LDBhMy42NywzLjY3LDAsMCwxLTEuMjUtLjE0LjUzLjUzLDAsMCwxLS4zLS41NCwyLDIsMCwwLDEsLjQxLTEuMywxLjMxLDEuMzEsMCwwLDEsMS0uNDksMS4zMywxLjMzLDAsMCwxLC41Ni4xMSwxLjMsMS4zLDAsMCwwLC40OS4xLDEuMDcsMS4wNywwLDAsMCwuNDktLjEsMS40NCwxLjQ0LDAsMCwxLC41Ni0uMSwyLjEzLDIuMTMsMCwwLDEsLjguMTcsMi41NSwyLjU1LDAsMCwxLC43MS40MWMuMTkuMTYuMjkuMy4yOS40NFYxOS4xWm0yLjE0LDEuMzd2LTEuNGguMTR2LS43OUg0LjA1VjExLjE2bC43MS0uNTR2N0gxOC4yNHYtN2wuNzEuNTR2Ny4xMkgxNC4zOXYuNzloLjE0djEuNFpNNS4wNSw4LjQxVjQuOEg0Ljc5VjNIN1Y0LjhINi43M1Y2LjY2Wm0uNzQsNS4xM3YtMWEuMzQuMzQsMCwwLDEsLjExLS4yNC4zLjMsMCwwLDEsLjI0LS4xaDF2MS4zMlptLjM1LDJhLjMuMywwLDAsMS0uMjQtLjEuMzQuMzQsMCwwLDEtLjExLS4yNXYtMUg3LjEydjEuMzNabTEuNTgtMlYxMi4yMmgxYS4zNC4zNCwwLDAsMSwuMzQuMzR2MVptMCwyVjE0LjE2SDkuMDV2MWEuMzMuMzMsMCwwLDEtLjEuMjUuMzMuMzMsMCwwLDEtLjI0LjFabTEuNDYsNC4yOWg0LjY0di0uNUg5LjE4Wm0uMTQtMWg0LjM2di0uNDhIOS4zMlptLjUzLTFWMTNhMS4zOCwxLjM4LDAsMCwxLC41LTEuMDgsMS43MiwxLjcyLDAsMCwxLDEuMTUtLjQ0LDEuNjksMS42OSwwLDAsMSwxLjE1LjQ0LDEuMzgsMS4zOCwwLDAsMSwuNSwxLjA4djQuOFpNMTIuNDQsMTVhLjI5LjI5LDAsMCwwLC4yMi0uMDkuMjkuMjksMCwwLDAsLjEtLjIzLjI3LjI3LDAsMCwwLS4xLS4yMi4zLjMsMCwwLDAtLjIyLS4xLjMzLjMzLDAsMCwwLS4yMy4xLjI5LjI5LDAsMCwwLS4wOS4yMi4zMS4zMSwwLDAsMCwuMzIuMzJabTEuMzgsNC4wOFYxNy42M2MwLS4xNC4xLS4yOC4yOS0uNDRhMi41NSwyLjU1LDAsMCwxLC43MS0uNDEsMi4yMSwyLjIxLDAsMCwxLC44LS4xNywxLjQ0LDEuNDQsMCwwLDEsLjU2LjEsMS4wNywxLjA3LDAsMCwwLC40OS4xLDEuMzUsMS4zNSwwLDAsMCwuNS0uMSwxLjI1LDEuMjUsMCwwLDEsLjU1LS4xMSwxLjI5LDEuMjksMCwwLDEsMSwuNDksMS45MywxLjkzLDAsMCwxLC40MSwxLjMuNTMuNTMsMCwwLDEtLjMuNTQsMy42MywzLjYzLDAsMCwxLTEuMjUuMTRsLS40NSwwSDEzLjgyWk0xNCwxMy41NHYtMWEuMzQuMzQsMCwwLDEsLjM0LS4zNGgxdjEuMzJabS4zNCwyYS4zMy4zMywwLDAsMS0uMjQtLjEuMzMuMzMsMCwwLDEtLjEtLjI1di0xaDEuMzN2MS4zM1ptMS41OS0yVjEyLjIyaDFhLjMuMywwLDAsMSwuMjQuMS4zNC4zNCwwLDAsMSwuMTEuMjR2MVptMCwyVjE0LjE2aDEuMzN2MWEuMzQuMzQsMCwwLDEtLjExLjI1LjMuMywwLDAsMS0uMjQuMVoiIGZpbGw9IiNmZmYiLz48L2c+PC9zdmc+',
     risk1_sparkles: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMi4wMzQ1LDIuODc0MClzY2FsZSgwLjIzMDYyOSkiPjxwYXRoIGQ9Ik00LjQzLDIwLjQ3bC0uMjktMS40MmE5LjM3LDkuMzcsMCwwLDAtLjM3LTEuNCwxLjczLDEuNzMsMCwwLDAtLjUyLS43OCwyLjY2LDIuNjYsMCwwLDAtMS0uNDRsLTEuNC0uMzd2LS44M2wxLjQtLjM4YTIuODQsMi44NCwwLDAsMCwxLS40NCwxLjczLDEuNzMsMCwwLDAsLjUyLS43OCw4Ljg3LDguODcsMCwwLDAsLjM3LTEuMzlsLjI5LTEuNDJoLjlsLjI4LDEuNDJBOC44Nyw4Ljg3LDAsMCwwLDYsMTMuNjNhMS42NywxLjY3LDAsMCwwLC41My43OCwyLjc1LDIuNzUsMCwwLDAsMSwuNDRsMS4zOC4zOHYuODNsLTEuMzguMzdhMi41OCwyLjU4LDAsMCwwLTEsLjQ0LDEuNjcsMS42NywwLDAsMC0uNTMuNzgsOS4zNyw5LjM3LDAsMCwwLS4zNywxLjRsLS4yOCwxLjQyWm0uNDItMWExMS44NSwxMS44NSwwLDAsMSwuMzYtMS43MiwzLjA3LDMuMDcsMCwwLDEsLjUyLTEuMDlBMi4xMywyLjEzLDAsMCwxLDYuNiwxNiw2Ljc1LDYuNzUsMCwwLDEsOCwxNS42MXYuMDZhNi43NSw2Ljc1LDAsMCwxLTEuNDEtLjQsMi4yLDIuMiwwLDAsMS0uODctLjY0LDMuMTMsMy4xMywwLDAsMS0uNTItMS4xLDExLjQsMTEuNCwwLDAsMS0uMzYtMS43MUg0LjlhMTQuODYsMTQuODYsMCwwLDEtLjM1LDEuNzFBMy4xMywzLjEzLDAsMCwxLDQsMTQuNjNhMi4wNiwyLjA2LDAsMCwxLS44Ny42NCw2LjY0LDYuNjQsMCwwLDEtMS40LjR2LS4wNmE2LjY0LDYuNjQsMCwwLDEsMS40LjQsMiwyLDAsMCwxLC44Ny42NSwzLjA4LDMuMDgsMCwwLDEsLjUzLDEuMDksMTUuNTYsMTUuNTYsMCwwLDEsLjM1LDEuNzJabTEtOS44Nkw1LjY1LDguNDhhNC42Niw0LjY2LDAsMCwwLS4zMy0xLjE0LDEuMjUsMS4yNSwwLDAsMC0uNTctLjU5QTMuOTIsMy45MiwwLDAsMCwzLjY4LDYuNEwzLDYuMjVWNS40M2wuNjktLjE2YTMuODksMy44OSwwLDAsMCwxLjA3LS4zNiwxLjI1LDEuMjUsMCwwLDAsLjU3LS41OSw0LjQzLDQuNDMsMCwwLDAsLjMzLTEuMTNsLjIyLTEuMTJoLjg0bC4yMywxLjEyYTUuNDMsNS40MywwLDAsMCwuMzMsMS4xMywxLjI4LDEuMjgsMCwwLDAsLjU2LjU5LDQuODEsNC44MSwwLDAsMCwxLjA4LjM2bC42OC4xNnYuODJsLS42OC4xNWE0LDQsMCwwLDAtMS4wOC4zNSwxLjMxLDEuMzEsMCwwLDAtLjU2LjYsNS40Myw1LjQzLDAsMCwwLS4zMywxLjEzTDYuNzEsOS42MVptLjM4LS44OWExMC43MSwxMC43MSwwLDAsMSwuMzEtMS4zNUEyLjE4LDIuMTgsMCwwLDEsNyw2LjU4YTEuNzgsMS43OCwwLDAsMSwuNy0uNDYsNy43Myw3LjczLDAsMCwxLDEuMS0uMzF2LjA2YTkuMTIsOS4xMiwwLDAsMS0xLjEtLjMyQTEuNzcsMS43NywwLDAsMSw3LDUuMWEyLjM4LDIuMzgsMCwwLDEtLjQ0LS44MUExMC4xLDEwLjEsMCwwLDEsNi4yNSwzaC4wOEExMC4xLDEwLjEsMCwwLDEsNiw0LjI5YTIuNTYsMi41NiwwLDAsMS0uNDMuODEsMS44NCwxLjg0LDAsMCwxLS43LjQ1LDEwLjM2LDEwLjM2LDAsMCwxLTEuMS4zMlY1LjgxYTguNTksOC41OSwwLDAsMSwxLjEuMzEsMS44NiwxLjg2LDAsMCwxLC43LjQ2QTIuMzQsMi4zNCwwLDAsMSw2LDcuMzdhMTAuNzEsMTAuNzEsMCwwLDEsLjMxLDEuMzVabTcuOTQsMTEuNzUtLjM1LTIuNDFxLS4yMy0xLjQ0LS40NS0yLjRhNi4wOSw2LjA5LDAsMCwwLS41OS0xLjU4LDIuOTQsMi45NCwwLDAsMC0uODktMSw1LDUsMCwwLDAtMS4zNS0uNjNxLS44MS0uMjQtMi0uNDhsLTEuNDYtLjN2LS44M2wxLjQ2LS4zcTEuMTctLjI0LDItLjQ4YTUsNSwwLDAsMCwxLjM1LS42MywzLDMsMCwwLDAsLjg5LTEsNiw2LDAsMCwwLC41OS0xLjU4cS4yMi0xLC40NS0yLjRsLjM1LTIuNDFoLjg3bC4zNCwyLjQxYy4xNCwxLC4yOCwxLjc2LjQ0LDIuNGE2LDYsMCwwLDAsLjU5LDEuNTgsMi44NiwyLjg2LDAsMCwwLC45LDEsNC43LDQuNywwLDAsMCwxLjM1LjYycS44MS4yNCwyLC40OGwxLjQ2LjN2LjgzbC0xLjQ2LjNxLTEuMTcuMjQtMiwuNDhhNSw1LDAsMCwwLTEuMzUuNjMsMi44NiwyLjg2LDAsMCwwLS45LDEsNi4wOSw2LjA5LDAsMCwwLS41OSwxLjU4Yy0uMTYuNjQtLjMsMS40NC0uNDQsMi40bC0uMzQsMi40MVptLjQtMS43Yy4xMy0xLC4yNy0xLjg2LjQxLTIuNThhMTEuMzIsMTEuMzIsMCwwLDEsLjQ5LTEuODMsNC4xOSw0LjE5LDAsMCwxLC43LTEuMjQsMy41NSwzLjU1LDAsMCwxLDEtLjgxLDcuNzQsNy43NCwwLDAsMSwxLjQ4LS41OGMuNTctLjE3LDEuMjUtLjMzLDItLjV2LjA4Yy0uOC0uMTgtMS40OC0uMzQtMi0uNWE3Ljc0LDcuNzQsMCwwLDEtMS40OC0uNTgsMy41NSwzLjU1LDAsMCwxLTEtLjgxLDQuMTksNC4xOSwwLDAsMS0uNy0xLjI0QTExLjMyLDExLjMyLDAsMCwxLDE1LDYuMzVjLS4xNC0uNzItLjI4LTEuNTgtLjQxLTIuNThoLjA2Yy0uMTQsMS0uMjcsMS44Ni0uNDEsMi41OGExMS4zMiwxMS4zMiwwLDAsMS0uNDksMS44Myw0LjE5LDQuMTksMCwwLDEtLjcsMS4yNCwzLjU1LDMuNTUsMCwwLDEtMSwuODEsNy45LDcuOSwwLDAsMS0xLjQ3LjU4Yy0uNTguMTYtMS4yNi4zMi0yLjA1LjV2LS4wOGMuNzkuMTcsMS40Ny4zMywyLjA1LjVBNy4yOCw3LjI4LDAsMCwxLDEyLDEyLjNhMy41NSwzLjU1LDAsMCwxLDEsLjgxLDQuMTksNC4xOSwwLDAsMSwuNywxLjI0LDExLjMyLDExLjMyLDAsMCwxLC40OSwxLjgzYy4xNC43Mi4yNywxLjU4LjQxLDIuNTlaIiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg==',
@@ -151,7 +138,6 @@ export default async function(ctx) {
       ? C.green
       : C.yellow;
 
-  // ==================== Location ====================
 
   const locationText = [
     data.country,
@@ -168,7 +154,6 @@ export default async function(ctx) {
   .filter(Boolean)
   .join(' · ');
 
-  // ==================== Helpers ====================
 
   function row(label, value, valueColor) {
 
@@ -376,7 +361,6 @@ export default async function(ctx) {
 
       children: [
 
-        // Header
         {
           type: 'stack',
           direction: 'row',
@@ -412,7 +396,6 @@ export default async function(ctx) {
           ]
         },
 
-        // Location
         {
           type: 'text',
           text: data.country || 'Unknown',
@@ -423,14 +406,12 @@ export default async function(ctx) {
           textColor: C.text
         },
 
-        // Network
         badge(networkText, networkColor),
 
         {
           type: 'spacer'
         },
 
-        // Risk
         {
           type: 'stack',
           direction: 'row',
@@ -493,7 +474,6 @@ export default async function(ctx) {
 
       children: [
 
-        // Header
         {
           type: 'stack',
           direction: 'row',
@@ -543,7 +523,6 @@ export default async function(ctx) {
           ]
         },
 
-        // IP
         {
           type: 'text',
           text: data.ip || 'N/A',
@@ -554,7 +533,6 @@ export default async function(ctx) {
           textColor: C.text
         },
 
-        // Status
         {
           type: 'stack',
           direction: 'row',
@@ -572,7 +550,6 @@ export default async function(ctx) {
           type: 'spacer'
         },
 
-        // Bottom
         {
           type: 'stack',
           direction: 'row',
@@ -626,7 +603,6 @@ export default async function(ctx) {
 
       children: [
 
-        // Header
         {
           type: 'stack',
           direction: 'row',
@@ -676,7 +652,6 @@ export default async function(ctx) {
           ]
         },
 
-        // Title
         {
           type: 'text',
           text: 'CURRENT IP',
@@ -687,7 +662,6 @@ export default async function(ctx) {
           textColor: C.muted
         },
 
-        // IP
         {
           type: 'text',
           text: data.ip || 'N/A',
@@ -698,7 +672,6 @@ export default async function(ctx) {
           textColor: C.text
         },
 
-        // Status
         {
           type: 'stack',
           direction: 'row',
@@ -712,7 +685,6 @@ export default async function(ctx) {
           ]
         },
 
-        // Details
         row(
           '位置',
           locationText || 'Unknown'
@@ -743,7 +715,6 @@ export default async function(ctx) {
           type: 'spacer'
         },
 
-        // Footer
         {
           type: 'stack',
           direction: 'row',
@@ -790,7 +761,6 @@ export default async function(ctx) {
 
     children: [
 
-      // Header
       {
         type: 'stack',
         direction: 'row',
@@ -840,7 +810,6 @@ export default async function(ctx) {
         ]
       },
 
-      // Title
       {
         type: 'text',
         text: 'CURRENT IP',
@@ -851,7 +820,6 @@ export default async function(ctx) {
         textColor: C.muted
       },
 
-      // IP
       {
         type: 'text',
         text: data.ip || 'N/A',
@@ -862,7 +830,6 @@ export default async function(ctx) {
         textColor: C.text
       },
 
-      // Status
       {
         type: 'stack',
         direction: 'row',
@@ -876,7 +843,6 @@ export default async function(ctx) {
         ]
       },
 
-      // Details
       row(
         '位置',
         locationText || 'Unknown'
@@ -927,7 +893,6 @@ export default async function(ctx) {
         type: 'spacer'
       },
 
-      // Footer
       {
         type: 'stack',
         direction: 'row',

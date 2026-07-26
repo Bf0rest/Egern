@@ -1,8 +1,4 @@
-// =============================================
-// Egern IPPure Widget V2 - UniFi Protect Style
-// Edition: Studio Solid-Matte with Air-Gradient & Micro Border
-// Risk tiers: IPPure 6-tier (custom labels)
-// =============================================
+// IPPure 6-tier risk labels (优质/良好/普通/低危/中危/高危)
 
 export default async function(ctx) {
 
@@ -12,14 +8,11 @@ export default async function(ctx) {
   const widgetFamily =
     ctx.widgetFamily || 'systemLarge';
 
-  // ==================== Premium Color Palette ====================
 
   const C = {
-    // 顶级的微调空气感黑灰：顶部稍深，底部稍浅，营造极为自然的沉浸感
     bgTop: '#0C0D0F',
     bgBottom: '#141619',
 
-    // 物理微轮廓边框颜色（类似 UniFi 设备的精致外壳边缘）
     borderColor: 'rgba(255, 255, 255, 0.06)',
 
     text: '#F8FAFC',
@@ -36,13 +29,11 @@ export default async function(ctx) {
     risk4: '#F97316',  // 50-70  中危
     risk5: '#DC2626',  // 70-100 高危
 
-    // 保留旧色用于向后兼容（网络类型等）
     green: '#34D399',
     yellow: '#FACC15',
     red: '#F87171',
   };
 
-  // 垂直空气感渐变配置
   const premiumGradient = {
     type: 'linear',
     colors: [C.bgTop, C.bgBottom],
@@ -50,7 +41,6 @@ export default async function(ctx) {
     endPoint: { x: 0.5, y: 1 }
   };
 
-  // ==================== Fetch ====================
 
   let data = null;
 
@@ -68,7 +58,6 @@ export default async function(ctx) {
 
   } catch(e) {}
 
-  // ==================== Fallback ====================
 
   if (!data) {
 
@@ -85,7 +74,6 @@ export default async function(ctx) {
 
   }
 
-  // ==================== Risk & Colors (6-tier) ====================
 
   const riskScore =
     Number(data.fraudScore || 0);
@@ -117,7 +105,6 @@ export default async function(ctx) {
     riskEmoji = '⚠️';
   }
 
-  // ==================== Network ====================
 
   const networkText =
     data.isResidential === true
@@ -129,7 +116,6 @@ export default async function(ctx) {
       ? C.green
       : C.yellow;
 
-  // ==================== Location ====================
 
   const locationText = [
     data.country,
@@ -146,7 +132,6 @@ export default async function(ctx) {
   .filter(Boolean)
   .join(' · ');
 
-  // ==================== Helpers ====================
 
   function row(label, value, valueColor) {
 
@@ -367,7 +352,6 @@ export default async function(ctx) {
 
       children: [
 
-        // Header
         {
           type: 'stack',
           direction: 'row',
@@ -403,7 +387,6 @@ export default async function(ctx) {
           ]
         },
 
-        // Location
         {
           type: 'text',
           text: data.country || 'Unknown',
@@ -414,14 +397,12 @@ export default async function(ctx) {
           textColor: C.text
         },
 
-        // Network
         badge(networkText, networkColor),
 
         {
           type: 'spacer'
         },
 
-        // Risk
         {
           type: 'stack',
           direction: 'row',
@@ -484,7 +465,6 @@ export default async function(ctx) {
 
       children: [
 
-        // Header
         {
           type: 'stack',
           direction: 'row',
@@ -534,7 +514,6 @@ export default async function(ctx) {
           ]
         },
 
-        // IP
         {
           type: 'text',
           text: data.ip || 'N/A',
@@ -545,7 +524,6 @@ export default async function(ctx) {
           textColor: C.text
         },
 
-        // Status
         {
           type: 'stack',
           direction: 'row',
@@ -563,7 +541,6 @@ export default async function(ctx) {
           type: 'spacer'
         },
 
-        // Bottom
         {
           type: 'stack',
           direction: 'row',
@@ -617,7 +594,6 @@ export default async function(ctx) {
 
       children: [
 
-        // Header
         {
           type: 'stack',
           direction: 'row',
@@ -667,7 +643,6 @@ export default async function(ctx) {
           ]
         },
 
-        // Title
         {
           type: 'text',
           text: 'CURRENT IP',
@@ -678,7 +653,6 @@ export default async function(ctx) {
           textColor: C.muted
         },
 
-        // IP
         {
           type: 'text',
           text: data.ip || 'N/A',
@@ -689,7 +663,6 @@ export default async function(ctx) {
           textColor: C.text
         },
 
-        // Status
         {
           type: 'stack',
           direction: 'row',
@@ -703,7 +676,6 @@ export default async function(ctx) {
           ]
         },
 
-        // Details
         row(
           '位置',
           locationText || 'Unknown'
@@ -734,7 +706,6 @@ export default async function(ctx) {
           type: 'spacer'
         },
 
-        // Footer
         {
           type: 'stack',
           direction: 'row',
@@ -781,7 +752,6 @@ export default async function(ctx) {
 
     children: [
 
-      // Header
       {
         type: 'stack',
         direction: 'row',
@@ -831,7 +801,6 @@ export default async function(ctx) {
         ]
       },
 
-      // Title
       {
         type: 'text',
         text: 'CURRENT IP',
@@ -842,7 +811,6 @@ export default async function(ctx) {
         textColor: C.muted
       },
 
-      // IP
       {
         type: 'text',
         text: data.ip || 'N/A',
@@ -853,7 +821,6 @@ export default async function(ctx) {
         textColor: C.text
       },
 
-      // Status
       {
         type: 'stack',
         direction: 'row',
@@ -867,7 +834,6 @@ export default async function(ctx) {
         ]
       },
 
-      // Details
       row(
         '位置',
         locationText || 'Unknown'
@@ -918,7 +884,6 @@ export default async function(ctx) {
         type: 'spacer'
       },
 
-      // Footer
       {
         type: 'stack',
         direction: 'row',
