@@ -49,13 +49,6 @@ function b64(str) {
   return btoa(encoded);
 }
 
-function extractText(resp) {
-  if (typeof resp === 'string') return resp;
-  if (resp && typeof resp.text === 'function') return resp.text();
-  if (resp && resp.body != null) return resp.body;
-  return '';
-}
-
 // ── Bezier 平滑曲线 SVG ───────────────────────
 
 function sparklineBezierSVG(arr, switchIndices, { color, fillColor, width, height, lineWidth }) {
@@ -135,9 +128,7 @@ async function fetchExitIP(ctx, group) {
   for (const url of urlList) {
     try {
       const ipResp = await ctx.http.get(url, ipOpts);
-      const raw = await extractText(ipResp);
-      if (!raw || !raw.trim()) continue;
-      const body = JSON.parse(raw);
+      const body = await ipResp.json();
       return body.origin || body.ip || 'unknown';
     } catch (_) {}
   }
