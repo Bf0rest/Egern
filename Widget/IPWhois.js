@@ -67,7 +67,6 @@ export default async function(ctx) {
   // --- 环境 ---
   const egVersion  = (Egern && Egern.version)  || 'null';
   const sysSystem  = ($environment && $environment.system) || 'null';
-  const sysLang    = ($environment && $environment.language) || 'null';
 
 
   // --- helper ---
@@ -88,13 +87,12 @@ export default async function(ctx) {
   }
 
 
-  // --- 仅 systemLarge ---
   return {
     type: 'widget',
     backgroundGradient: gradient,
     border: { width: 1, color: C.borderColor },
-    padding: 16,
-    gap: 6,
+    padding: 14,
+    gap: 4,
 
     children: [
 
@@ -116,7 +114,7 @@ export default async function(ctx) {
         ]
       },
 
-      { type: 'spacer', height: 4 },
+      { type: 'spacer', height: 2 },
 
       title('出口'),
       kv('IP',     ip,      fetchOk),
@@ -141,9 +139,8 @@ export default async function(ctx) {
 
       { type: 'spacer', height: 2 },
       title('环境'),
-      kv('Egern', egVersion, egVersion !== 'null'),
-      kv('系统',   sysSystem, sysSystem !== 'null'),
-      kv('语言',   sysLang,   sysLang   !== 'null'),
+      kv('Egern',  egVersion, egVersion !== 'null'),
+      kv('系统',    sysSystem, sysSystem !== 'null'),
 
     ]
   };
