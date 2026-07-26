@@ -236,18 +236,25 @@ export default async function(ctx) {
       type: 'widget',
       padding: 4,
       gap: 2,
-      alignItems: 'center',
 
       children: [
 
         { type: 'spacer' },
 
         {
-          type: 'image',
-          src: riskIcon,
-          width: 26,
-          height: 26,
-          color: '#FFFFFF'
+          type: 'stack',
+          direction: 'row',
+          children: [
+            { type: 'spacer' },
+            {
+              type: 'image',
+              src: riskIcon,
+              width: 26,
+              height: 26,
+              color: '#FFFFFF'
+            },
+            { type: 'spacer' }
+          ]
         },
 
         { type: 'spacer' }
