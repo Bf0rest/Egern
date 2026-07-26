@@ -248,8 +248,8 @@ export default async function(ctx) {
             {
               type: 'image',
               src: riskIcon,
-              width: 22,
-              height: 22,
+              width: 28,
+              height: 28,
               resizeMode: 'cover'
             },
             { type: 'spacer' }
