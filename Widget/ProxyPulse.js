@@ -1,6 +1,6 @@
 /******************************
   脚本名称: ProxyPulse
-  Version : v1.2.0
+  Version : v1.2.1
   更新时间: 2026-07-27
   平台: Egern（适配 TF 2.20.0 766+）
   功能: 代理延迟监控 — 柱形图 + IP 切换高亮
@@ -16,6 +16,7 @@
    *   延迟用 gstatic 每次测，IP 每 N 次刷新查一次
    * - LATENCY_SPIKE: 延迟突变阈值（0-1，默认 0.6）
    *   延迟变化 >60% 视为切换（应对同 IP 不同节点）
+   *   前后两次刷新间隔 >20min 时跳过突变检测（避免把后台唤醒的开销当切换）
 *******************************/
 
 const LATENCY_URL = 'https://www.gstatic.com/generate_204';
@@ -160,13 +161,19 @@ function saveHistory(ctx, history) {
   } catch (_) {}
 }
 
+// 超过此间隔认为是后台恢复，跳过延迟突变检测
+const SPIKE_GAP_MS = 20 * 60 * 1000; // 20 分钟
+
 function addPoint(history, point, spikeThreshold) {
   const prev = history.length ? history[history.length - 1] : null;
   if (!prev) {
     return [{ ...point, switched: false }];
   }
   const ipChanged = prev.exitIP !== point.exitIP;
-  const spike = Math.abs(point.latency - prev.latency) / Math.max(prev.latency, 1) > spikeThreshold;
+  const gapMs = point.time - prev.time;
+  // 间隔过长（后台恢复/冷启动），不检测延迟突变
+  const spike = gapMs < SPIKE_GAP_MS
+    && Math.abs(point.latency - prev.latency) / Math.max(prev.latency, 1) > spikeThreshold;
   const switched = ipChanged || spike;
   const updated = [...history, { ...point, switched }];
   return updated.slice(-24);
