@@ -1,7 +1,7 @@
 // =============================================
 // Egern IPPure Widget V2 - UniFi Protect Style
 // Edition: Studio Solid-Matte with Air-Gradient & Micro Border
-// Risk tiers: IPPure official 6-tier (2026)
+// Risk tiers: IPPure 6-tier (custom labels)
 // =============================================
 
 export default async function(ctx) {
@@ -28,13 +28,13 @@ export default async function(ctx) {
 
     blue: '#60A5FA',
 
-    // IPPure 官方 6 档风险色
-    risk0: '#166534',  // 0-15   极度纯净
-    risk1: '#22C55E',  // 15-25  纯净
-    risk2: '#84CC16',  // 25-40  中性
-    risk3: '#EAB308',  // 40-50  轻度风险
-    risk4: '#F97316',  // 50-70  中度风险
-    risk5: '#DC2626',  // 70-100 极度风险
+    // IPPure 6 档风险色（自定义标签）
+    risk0: '#166534',  // 0-15   优质
+    risk1: '#22C55E',  // 15-25  良好
+    risk2: '#84CC16',  // 25-40  普通
+    risk3: '#EAB308',  // 40-50  低危
+    risk4: '#F97316',  // 50-70  中危
+    risk5: '#DC2626',  // 70-100 高危
 
     // 保留旧色用于向后兼容（网络类型等）
     green: '#34D399',
@@ -85,34 +85,34 @@ export default async function(ctx) {
 
   }
 
-  // ==================== Risk & Colors (IPPure 6-tier) ====================
+  // ==================== Risk & Colors (6-tier) ====================
 
   const riskScore =
     Number(data.fraudScore || 0);
 
-  let riskText = '极度风险';
+  let riskText = '高危';
   let riskColor = C.risk5;
 
   let riskEmoji = '🤖';
 
   if (riskScore <= 15) {
-    riskText = '极度纯净';
+    riskText = '优质';
     riskColor = C.risk0;
     riskEmoji = '💎';
   } else if (riskScore <= 25) {
-    riskText = '纯净';
+    riskText = '良好';
     riskColor = C.risk1;
     riskEmoji = '✨';
   } else if (riskScore <= 40) {
-    riskText = '中性';
+    riskText = '普通';
     riskColor = C.risk2;
     riskEmoji = '😐';
   } else if (riskScore <= 50) {
-    riskText = '轻度风险';
+    riskText = '低危';
     riskColor = C.risk3;
     riskEmoji = '🤔';
   } else if (riskScore <= 70) {
-    riskText = '中度风险';
+    riskText = '中危';
     riskColor = C.risk4;
     riskEmoji = '⚠️';
   }
