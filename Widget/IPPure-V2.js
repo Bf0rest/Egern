@@ -1,9 +1,10 @@
+// 添加环境变量，名称：GROUP，值：策略组名称
 // IPPure 6-tier risk labels (优质/良好/普通/低危/中危/高危)
 
 export default async function(ctx) {
 
   const strategyGroup =
-    ctx.env.STRATEGY_GROUP || 'DIRECT';
+    ctx.env.GROUP || 'DIRECT';
 
   const widgetFamily =
     ctx.widgetFamily || 'systemLarge';
