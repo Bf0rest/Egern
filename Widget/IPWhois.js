@@ -1,5 +1,5 @@
 // 添加环境变量，名称：GROUP，值：策略组名称
-// 内置 IP 查询（$utils），无需外部风险评分 API
+// 全参数诊断面板 — 仅 systemLarge
 
 export default async function(ctx) {
 
@@ -13,13 +13,10 @@ export default async function(ctx) {
   const C = {
     bgTop: '#0C0D0F',
     bgBottom: '#141619',
-
     borderColor: 'rgba(255, 255, 255, 0.06)',
-
     text: '#F8FAFC',
     secondary: '#94A3B8',
     muted: '#64748B',
-
     blue: '#60A5FA',
     green: '#34D399',
     yellow: '#FACC15',
@@ -34,783 +31,133 @@ export default async function(ctx) {
   };
 
 
-  let ip = null;
-  let country = '--';
-  let asn = '--';
-  let aso = '--';
+  // --- fetch outgoing IP + latency ---
+  let ip = '--';
+  let latency = '--';
   let fetchOk = false;
+  const t0 = Date.now();
 
   try {
-
     const resp = await ctx.http.get(
       'https://httpbin.org/ip',
-      {
-        policy: strategyGroup,
-        timeout: 8000
-      }
+      { policy: strategyGroup, timeout: 8000 }
     );
-
     const body = await resp.json();
-    ip = body.origin;
-
-    if (ip) {
-      country = $utils.geoip(ip) || '--';
-      asn = String($utils.ipasn(ip) || '--');
-      aso = $utils.ipaso(ip) || '--';
-      fetchOk = true;
-    }
-
-  } catch(e) {}
-
-
-  if (!fetchOk) {
-    ip = '(no network)';
-    aso = 'Network Error';
+    ip = body.origin || '--';
+    latency = (Date.now() - t0) + 'ms';
+    fetchOk = true;
+  } catch(e) {
+    latency = (Date.now() - t0) + 'ms';
   }
 
 
-  const shortLocation = country !== '--'
-    ? country
-    : 'Unknown';
+  // --- $utils IP lookups ---
+  const geoCountry = ip !== '--' ? ($utils.geoip(ip) || 'null') : '--';
+  const geoAsn     = ip !== '--' ? ($utils.ipasn(ip) || 'null') : '--';
+  const geoAso     = ip !== '--' ? ($utils.ipaso(ip) || 'null') : '--';
 
 
+  // --- device / local network ---
+  const wifiSsid  = ($network && $network.wifi && $network.wifi.ssid)  || 'null';
+  const wifiBssid = ($network && $network.wifi && $network.wifi.bssid) || 'null';
+  const cellRadio   = ($network && $network['cellular-data'] && $network['cellular-data'].radio)   || 'null';
+  const cellCarrier = ($network && $network['cellular-data'] && $network['cellular-data'].carrier) || 'null';
+  const localV4     = ($network && $network.v4 && $network.v4.primaryAddress) || 'null';
+  const localV4Gw   = ($network && $network.v4 && $network.v4.primaryRouter)   || 'null';
+  const localV6     = ($network && $network.v6 && $network.v6.primaryAddress)  || 'null';
+  const dnsServers  = ($network && $network.dns) ? JSON.stringify($network.dns) : 'null';
+
+
+  // --- Egern / system ---
+  const egVersion  = (Egern && Egern.version)  || 'null';
+  const egLanguage = (Egern && Egern.language) || 'null';
+  const sysSystem  = ($environment && $environment.system) || 'null';
+  const sysLang    = ($environment && $environment.language) || 'null';
+
+
+  // --- helpers ---
   function row(label, value, valueColor) {
-
     return {
       type: 'stack',
       direction: 'row',
       children: [
-
-        {
-          type: 'text',
-          text: label,
-          font: {
-            size: 'caption1',
-            weight: 'medium'
-          },
-          textColor: C.muted
-        },
-
-        {
-          type: 'spacer'
-        },
-
-        {
-          type: 'text',
-          text: value,
-          font: {
-            size: 'caption1',
-            weight: 'medium'
-          },
-          textColor: valueColor || C.secondary,
-          textAlign: 'right'
-        }
-
+        { type: 'text', text: label, font: { size: 'caption2', weight: 'medium' }, textColor: C.muted },
+        { type: 'spacer' },
+        { type: 'text', text: value, font: { size: 'caption2', weight: 'medium' }, textColor: valueColor || C.secondary, textAlign: 'right', maxLine: 1 }
       ]
     };
-
   }
 
-  function badge(text, color) {
-
+  function section(title) {
     return {
-      type: 'stack',
-      direction: 'row',
-      gap: 5,
-      children: [
-
-        {
-          type: 'image',
-          src: 'sf-symbol:circle.fill',
-          width: 7,
-          height: 7,
-          color: color
-        },
-
-        {
-          type: 'text',
-          text: text,
-          font: {
-            size: 'caption2',
-            weight: 'bold'
-          },
-          textColor: color
-        }
-
-      ]
+      type: 'text',
+      text: title,
+      font: { size: 'caption1', weight: 'bold' },
+      textColor: C.blue
     };
-
   }
 
-  // ============================================
-  // LOCK SCREEN: CIRCULAR
-  // ============================================
 
-  if (widgetFamily === 'accessoryCircular') {
-
-    return {
-
-      type: 'widget',
-      padding: 4,
-      gap: 0,
-
-      children: [
-
-        {
-          type: 'stack',
-          direction: 'row',
-          children: [
-            { type: 'spacer' },
-            {
-              type: 'text',
-              text: shortLocation,
-              font: { size: 14, weight: 'bold' },
-              textColor: C.text,
-              textAlign: 'center'
-            },
-            { type: 'spacer' }
-          ]
-        },
-
-        {
-          type: 'stack',
-          direction: 'row',
-          children: [
-            { type: 'spacer' },
-            {
-              type: 'text',
-              text: 'AS' + asn,
-              font: { size: 7, weight: 'medium' },
-              textColor: C.muted,
-              textAlign: 'center',
-              maxLine: 1
-            },
-            { type: 'spacer' }
-          ]
-        }
-
-      ]
-
-    };
-
-  }
-
-  // ============================================
-  // LOCK SCREEN: RECTANGULAR
-  // ============================================
-
-  if (widgetFamily === 'accessoryRectangular') {
-
-    return {
-
-      type: 'widget',
-      padding: [6, 10],
-      gap: 2,
-
-      children: [
-
-        {
-          type: 'text',
-          text: country !== '--' ? country : 'Unknown',
-          font: {
-            size: 14,
-            weight: 'semibold'
-          },
-          textColor: C.text,
-          maxLine: 1
-        },
-
-        {
-          type: 'text',
-          text: aso,
-          font: {
-            size: 11,
-            weight: 'medium'
-          },
-          textColor: C.secondary,
-          maxLine: 1
-        },
-
-        {
-          type: 'text',
-          text: 'AS' + asn,
-          font: {
-            size: 11,
-            weight: 'medium'
-          },
-          textColor: C.blue,
-          maxLine: 1
-        }
-
-      ]
-
-    };
-
-  }
-
-  // ============================================
-  // LOCK SCREEN: INLINE
-  // ============================================
-
-  if (widgetFamily === 'accessoryInline') {
-
-    return {
-
-      type: 'widget',
-
-      children: [
-
-        {
-          type: 'text',
-          text: country !== '--'
-            ? country + ' · AS' + asn
-            : 'Unknown',
-          font: {
-            size: 14,
-            weight: 'semibold'
-          },
-          textColor: C.text,
-          maxLine: 1
-        }
-
-      ]
-
-    };
-
-  }
-
-  // ============================================
-  // SMALL
-  // ============================================
-
-  if (widgetFamily === 'systemSmall') {
-
-    return {
-
-      type: 'widget',
-      backgroundGradient: premiumGradient,
-      border: { width: 1, color: C.borderColor },
-      padding: 16,
-      gap: 10,
-
-      children: [
-
-        {
-          type: 'stack',
-          direction: 'row',
-          children: [
-
-            {
-              type: 'stack',
-              direction: 'row',
-              gap: 6,
-              children: [
-
-                {
-                  type: 'image',
-                  src: 'sf-symbol:globe',
-                  width: 14,
-                  height: 14,
-                  color: C.green
-                },
-
-                {
-                  type: 'text',
-                  text: strategyGroup,
-                  font: {
-                    size: 'caption1',
-                    weight: 'bold'
-                  },
-                  textColor: C.blue
-                }
-
-              ]
-            }
-
-          ]
-        },
-
-        {
-          type: 'text',
-          text: shortLocation,
-          font: {
-            size: 15,
-            weight: 'semibold'
-          },
-          textColor: C.text
-        },
-
-        badge('AS' + asn, C.blue),
-
-        {
-          type: 'spacer'
-        },
-
-        {
-          type: 'text',
-          text: ip === '(no network)' ? ip : ip,
-          font: {
-            size: 12,
-            weight: 'medium'
-          },
-          textColor: C.secondary,
-          maxLine: 1
-        }
-
-      ]
-
-    };
-
-  }
-
-  // ============================================
-  // MEDIUM
-  // ============================================
-
-  if (widgetFamily === 'systemMedium') {
-
-    return {
-
-      type: 'widget',
-      backgroundGradient: premiumGradient,
-      border: { width: 1, color: C.borderColor },
-      padding: 18,
-      gap: 10,
-
-      children: [
-
-        {
-          type: 'stack',
-          direction: 'row',
-          children: [
-
-            {
-              type: 'stack',
-              direction: 'row',
-              gap: 8,
-              children: [
-
-                {
-                  type: 'image',
-                  src: 'sf-symbol:globe',
-                  width: 16,
-                  height: 16,
-                  color: C.green
-                },
-
-                {
-                  type: 'text',
-                  text: 'IPWhois',
-                  font: {
-                    size: 'headline',
-                    weight: 'bold'
-                  },
-                  textColor: C.text
-                }
-
-              ]
-            },
-
-            {
-              type: 'spacer'
-            },
-
-            {
-              type: 'text',
-              text: strategyGroup,
-              font: {
-                size: 'caption1',
-                weight: 'bold'
-              },
-              textColor: C.blue
-            }
-
-          ]
-        },
-
-        {
-          type: 'text',
-          text: ip || 'N/A',
-          font: {
-            size: 24,
-            weight: 'bold'
-          },
-          textColor: C.text
-        },
-
-        {
-          type: 'stack',
-          direction: 'row',
-          gap: 10,
-          children: [
-
-            badge(country !== '--' ? country : 'Unknown', C.green),
-
-            badge('AS' + asn, C.blue)
-
-          ]
-        },
-
-        {
-          type: 'spacer'
-        },
-
-        {
-          type: 'stack',
-          direction: 'row',
-          children: [
-
-            {
-              type: 'text',
-              text: aso,
-              font: {
-                size: 'subheadline'
-              },
-              textColor: C.secondary
-            },
-
-            {
-              type: 'spacer'
-            },
-
-            {
-              type: 'text',
-              text: ip === '(no network)' ? '✗' : '✓',
-              font: {
-                size: 'title3',
-                weight: 'bold'
-              },
-              textColor: fetchOk ? C.green : C.red
-            }
-
-          ]
-        }
-
-      ]
-
-    };
-
-  }
-
-  // ============================================
-  // EXTRA LARGE (iPad)
-  // ============================================
-
-  if (widgetFamily === 'systemExtraLarge') {
-
-    return {
-
-      type: 'widget',
-      backgroundGradient: premiumGradient,
-      border: { width: 1, color: C.borderColor },
-      padding: 22,
-      gap: 16,
-
-      children: [
-
-        {
-          type: 'stack',
-          direction: 'row',
-          children: [
-
-            {
-              type: 'stack',
-              direction: 'row',
-              gap: 8,
-              children: [
-
-                {
-                  type: 'image',
-                  src: 'sf-symbol:globe',
-                  width: 20,
-                  height: 20,
-                  color: C.green
-                },
-
-                {
-                  type: 'text',
-                  text: 'IPWhois',
-                  font: {
-                    size: 'headline',
-                    weight: 'bold'
-                  },
-                  textColor: C.text
-                }
-
-              ]
-            },
-
-            {
-              type: 'spacer'
-            },
-
-            {
-              type: 'text',
-              text: strategyGroup,
-              font: {
-                size: 'caption1',
-                weight: 'bold'
-              },
-              textColor: C.blue
-            }
-
-          ]
-        },
-
-        {
-          type: 'text',
-          text: 'CURRENT IP',
-          font: {
-            size: 'caption1',
-            weight: 'bold'
-          },
-          textColor: C.muted
-        },
-
-        {
-          type: 'text',
-          text: ip || 'N/A',
-          font: {
-            size: 36,
-            weight: 'bold'
-          },
-          textColor: C.text
-        },
-
-        {
-          type: 'stack',
-          direction: 'row',
-          gap: 14,
-          children: [
-
-            badge(country !== '--' ? country : 'Unknown', C.green),
-
-            badge('AS' + asn, C.blue)
-
-          ]
-        },
-
-        row(
-          '国家',
-          country !== '--' ? country : 'Unknown'
-        ),
-
-        row(
-          '运营商',
-          aso
-        ),
-
-        row(
-          'ASN',
-          'AS' + asn,
-          C.blue
-        ),
-
-        {
-          type: 'spacer'
-        },
-
-        {
-          type: 'stack',
-          direction: 'row',
-          gap: 6,
-          children: [
-
-            {
-              type: 'image',
-              src: 'sf-symbol:checkmark.circle.fill',
-              width: 12,
-              height: 12,
-              color: C.green
-            },
-
-            {
-              type: 'text',
-              text: 'Connection Active',
-              font: {
-                size: 'caption2'
-              },
-              textColor: C.secondary
-            }
-
-          ]
-        }
-
-      ]
-
-    };
-
-  }
-
-  // ============================================
-  // LARGE
-  // ============================================
+  // --- output ---
 
   return {
-
     type: 'widget',
     backgroundGradient: premiumGradient,
     border: { width: 1, color: C.borderColor },
-    padding: 20,
-    gap: 14,
+    padding: 16,
+    gap: 6,
 
     children: [
 
+      // header
       {
         type: 'stack',
         direction: 'row',
         children: [
-
           {
             type: 'stack',
             direction: 'row',
-            gap: 8,
+            gap: 6,
             children: [
-
-              {
-                type: 'image',
-                src: 'sf-symbol:globe',
-                width: 18,
-                height: 18,
-                color: C.green
-              },
-
-              {
-                type: 'text',
-                text: 'IPWhois',
-                font: {
-                  size: 'headline',
-                  weight: 'bold'
-                },
-                textColor: C.text
-              }
-
+              { type: 'image', src: 'sf-symbol:globe', width: 14, height: 14, color: C.green },
+              { type: 'text', text: 'IPWhois', font: { size: 'headline', weight: 'bold' }, textColor: C.text }
             ]
           },
-
-          {
-            type: 'spacer'
-          },
-
-          {
-            type: 'text',
-            text: strategyGroup,
-            font: {
-              size: 'caption1',
-              weight: 'bold'
-            },
-            textColor: C.blue
-          }
-
-        ]
-      },
-
-      {
-        type: 'text',
-        text: 'CURRENT IP',
-        font: {
-          size: 'caption1',
-          weight: 'bold'
-        },
-        textColor: C.muted
-      },
-
-      {
-        type: 'text',
-        text: ip || 'N/A',
-        font: {
-          size: 32,
-          weight: 'bold'
-        },
-        textColor: C.text
-      },
-
-      {
-        type: 'stack',
-        direction: 'row',
-        gap: 14,
-        children: [
-
-          badge(country !== '--' ? country : 'Unknown', C.green),
-
-          badge('AS' + asn, C.blue)
-
-        ]
-      },
-
-      row(
-        '国家',
-        country !== '--' ? country : 'Unknown'
-      ),
-
-      row(
-        '运营商',
-        aso
-      ),
-
-      {
-        type: 'stack',
-        direction: 'row',
-        children: [
-
-          {
-            type: 'text',
-            text: 'ASN',
-            font: {
-              size: 'caption1',
-              weight: 'medium'
-            },
-            textColor: C.muted
-          },
-
           { type: 'spacer' },
-
-          {
-            type: 'text',
-            text: 'AS' + asn,
-            font: {
-              size: 'caption1',
-              weight: 'bold'
-            },
-            textColor: C.blue,
-            textAlign: 'right'
-          }
-
+          { type: 'text', text: strategyGroup, font: { size: 'caption1', weight: 'bold' }, textColor: C.blue }
         ]
       },
 
-      {
-        type: 'spacer'
-      },
+      { type: 'spacer', height: 4 },
 
-      {
-        type: 'stack',
-        direction: 'row',
-        gap: 6,
-        children: [
+      section('出口'),
+      row('IP', ip, C.green),
+      row('延迟', latency, C.secondary),
 
-          {
-            type: 'image',
-            src: 'sf-symbol:checkmark.circle.fill',
-            width: 12,
-            height: 12,
-            color: C.green
-          },
+      { type: 'spacer', height: 2 },
+      section('$utils'),
+      row('geoip (国家)', String(geoCountry), geoCountry !== 'null' ? C.green : C.yellow),
+      row('ipasn (ASN)',   String(geoAsn),     geoAsn     !== 'null' ? C.green : C.yellow),
+      row('ipaso (运营商)', geoAso,             geoAso     !== 'null' ? C.green : C.yellow),
 
-          {
-            type: 'text',
-            text: 'Connection Active',
-            font: {
-              size: 'caption2'
-            },
-            textColor: C.secondary
-          }
+      { type: 'spacer', height: 2 },
+      section('本地网络 ($network)'),
+      row('Wi-Fi SSID',  wifiSsid,  wifiSsid  !== 'null' ? C.green : C.yellow),
+      row('Wi-Fi BSSID', wifiBssid, wifiBssid !== 'null' ? C.green : C.yellow),
+      row('蜂窝制式',     cellRadio,   cellRadio   !== 'null' ? C.green : C.yellow),
+      row('蜂窝运营商',   cellCarrier, cellCarrier !== 'null' ? C.green : C.yellow),
+      row('IPv4 地址',   localV4,   localV4   !== 'null' ? C.green : C.yellow),
+      row('IPv4 网关',   localV4Gw, localV4Gw !== 'null' ? C.green : C.yellow),
+      row('IPv6 地址',   localV6,   localV6   !== 'null' ? C.green : C.yellow),
+      row('DNS',          dnsServers, dnsServers !== 'null' ? C.green : C.yellow),
 
-        ]
-      }
+      { type: 'spacer', height: 2 },
+      section('环境'),
+      row('Egern',  egVersion,  C.green),
+      row('系统',    sysSystem,  C.green),
+      row('语言',    sysLang,    C.secondary),
 
     ]
-
   };
 
 }
