@@ -128,7 +128,9 @@ export default async function(ctx) {
 
     const svg = atob(src.slice(prefix.length))
       .replace(/<g transform="[^"]*">/, '')
-      .replace('</g>', '');
+      .replace('</g>', '')
+      // Circular 会限制 image 外层尺寸；收紧 viewBox 才能真正放大路径。
+      .replace('viewBox="0 0 24 24"', 'viewBox="0 0 21 21"');
 
     return prefix + btoa(svg);
   }
