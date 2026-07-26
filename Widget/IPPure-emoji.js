@@ -120,6 +120,19 @@ export default async function(ctx) {
     risk5_poop: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMS4xMzE4LDEuMTU5OSlzY2FsZSgwLjIzNDI1NSkiPjxwYXRoIGQ9Ik0xMS41LDIwLjQ3QTE0LjExLDE0LjExLDAsMCwxLDcuODksMjAsOS43Nyw5Ljc3LDAsMCwxLDUsMTguNzhhNiw2LDAsMCwxLTEuODctMS44OSw0LjQ1LDQuNDUsMCwwLDEtLjY3LTIuMzksMy4yMywzLjIzLDAsMCwxLC43Mi0yLjE1LDQuNDMsNC40MywwLDAsMSwyLTEuMjksNS41MSw1LjUxLDAsMCwxLS4wNy0uNzlBMy40OSwzLjQ5LDAsMCwxLDUuOCw4LjE0YTMuMzMsMy4zMywwLDAsMSwxLjgzLTEuMlY2Ljc3QTUuNjMsNS42MywwLDAsMSw4LDQuNjdhMy40OCwzLjQ4LDAsMCwxLDEuMi0xLjQ2QTkuMTgsOS4xOCwwLDAsMSwxMS41LDIuMDdhNy4xLDcuMSwwLDAsMCwuMTQsMS41NiwxLjQ5LDEuNDksMCwwLDAsLjQ5Ljg3LDIuNDEsMi40MSwwLDAsMCwxLC40MkwxMy42LDVhNC43Myw0LjczLDAsMCwxLDIuMjUuOTMsMi4xNiwyLjE2LDAsMCwxLC42OSwxLjcsMi4zOSwyLjM5LDAsMCwxLDAsLjQ0LDMuMzksMy4zOSwwLDAsMS0uMS40OCwyLjg4LDIuODgsMCwwLDEsMS4zNCwxLDMsMywwLDAsMSwuNTMsMS42NSw0LjE5LDQuMTksMCwwLDEsMS42NiwxLjM3LDMuMzMsMy4zMywwLDAsMSwuNTksMS45Miw0LjUzLDQuNTMsMCwwLDEtLjY2LDIuMzlBNi4wOCw2LjA4LDAsMCwxLDE4LDE4Ljc4LDkuNzcsOS43NywwLDAsMSwxNS4xLDIwLDE0LjA5LDE0LjA5LDAsMCwxLDExLjUsMjAuNDdaTTksMTQuMDlhMS44NiwxLjg2LDAsMCwwLDEtLjI3LDIuMDcsMi4wNywwLDAsMCwuNzItLjcyLDEuODksMS44OSwwLDAsMCwuMjctMSwxLjg2LDEuODYsMCwwLDAtLjI3LTFBMi4wNywyLjA3LDAsMCwwLDEwLDEwLjRhMS44NiwxLjg2LDAsMCwwLTEtLjI3LDEuODksMS44OSwwLDAsMC0xLC4yNywyLjA3LDIuMDcsMCwwLDAtLjcyLjcyLDEuODYsMS44NiwwLDAsMC0uMjcsMSwxLjg5LDEuODksMCwwLDAsLjI3LDEsMi4wNywyLjA3LDAsMCwwLC43Mi43MkExLjg5LDEuODksMCwwLDAsOSwxNC4wOVpNOSwxM2EuOTIuOTIsMCwxLDEsLjkyLS45MkEuOTQuOTQsMCwwLDEsOSwxM1pNMTEuNSwxOC4yQTMuNzEsMy43MSwwLDAsMCwxMi43MywxOGE0LjQzLDQuNDMsMCwwLDAsMS4xLS41OCwzLjA5LDMuMDksMCwwLDAsLjc3LS44MSwxLjY4LDEuNjgsMCwwLDAsLjI5LS45LjYzLjYzLDAsMCwwLS4xMS0uMzguMzcuMzcsMCwwLDAtLjM3LS4xYy0uNjEuMDctMS4xMy4xMy0xLjU2LjE2cy0uODguMDYtMS4zNS4wNi0uOTIsMC0xLjM1LS4wNi0xLS4wOS0xLjU2LS4xNmEuMzcuMzcsMCwwLDAtLjM3LjEuNjMuNjMsMCwwLDAtLjExLjM4LDEuNjgsMS42OCwwLDAsMCwuMjkuOSwzLjA5LDMuMDksMCwwLDAsLjc3LjgxLDQuNDMsNC40MywwLDAsMCwxLjEuNThBMy43MSwzLjcxLDAsMCwwLDExLjUsMTguMlpNMTQsMTQuMDlhMS45LDEuOSwwLDAsMCwxLS4yNywyLjEzLDIuMTMsMCwwLDAsLjcxLS43MiwxLjg5LDEuODksMCwwLDAsLjI3LTEsMS44NiwxLjg2LDAsMCwwLS4yNy0xQTIuMTMsMi4xMywwLDAsMCwxNSwxMC40YTIsMiwwLDAsMC0yLDAsMi4wNywyLjA3LDAsMCwwLS43Mi43MiwxLjg2LDEuODYsMCwwLDAtLjI3LDEsMS44OSwxLjg5LDAsMCwwLC4yNywxLDIuMDcsMi4wNywwLDAsMCwuNzIuNzJBMS44OSwxLjg5LDAsMCwwLDE0LDE0LjA5Wk0xNCwxM2EuOTQuOTQsMCwwLDEtLjkyLS45MkEuOTIuOTIsMCwxLDEsMTQsMTNaIiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg=='
   };
   // Select icon by risk tier
+  // SVG 生成时误把路径缩小到约 0.2 倍，导致 Circular 中图标几乎不可见。
+  // 保留原 SVG 路径和语义，只移除内部 transform，让路径按原始 24×24 viewBox 绘制。
+  function restoreSvgIcon(src) {
+    const prefix = 'data:image/svg+xml;base64,';
+    if (!src || src.indexOf(prefix) !== 0) return src;
+
+    const svg = atob(src.slice(prefix.length))
+      .replace(/<g transform="[^"]*">/, '')
+      .replace('</g>', '');
+
+    return prefix + btoa(svg);
+  }
+
   let riskIcon = riskIconMap.risk5_poop;
   if      (riskScore <= 15) riskIcon = riskIconMap.risk0_house;
   else if (riskScore <= 25) riskIcon = riskIconMap.risk1_sparkles;
@@ -247,9 +260,9 @@ export default async function(ctx) {
             { type: 'spacer' },
             {
               type: 'image',
-              src: riskIcon,
-              width: 34,
-              height: 34,
+              src: restoreSvgIcon(riskIcon),
+              width: 26,
+              height: 26,
               resizeMode: 'cover'
             },
             { type: 'spacer' }
