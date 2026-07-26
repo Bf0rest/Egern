@@ -1,9 +1,9 @@
 /******************************
   脚本名称: ProxyPulse
-  Version : v1.1.0
+  Version : v1.2.0
   更新时间: 2026-07-27
   平台: Egern（适配 TF 2.20.0 766+）
-  功能: 代理延迟监控 — 平滑曲线 + IP 切换标记
+  功能: 代理延迟监控 — 柱形图 + IP 切换高亮
   作者: @langl
   使用说明:
   1. 添加到 Egern 脚本
@@ -29,7 +29,6 @@ const C = {
   accent: '#5E6AD2',
   text: '#FFFFFF',
   textSecondary: '#828282',
-  accentFill: '#5E6AD2',
 };
 
 // ── 工具函数 ──────────────────────────────────
@@ -49,64 +48,29 @@ function b64(str) {
   return btoa(encoded);
 }
 
-// ── Bezier 平滑曲线 SVG ───────────────────────
+// ── 柱形图 SVG ────────────────────────────────
 
-function sparklineBezierSVG(arr, switchIndices, { color, fillColor, width, height, lineWidth }) {
+function sparklineBarSVG(arr, switchBooleans, { normalColor, switchColor, width, height }) {
   const nums = (arr || []).map(Number).filter(Number.isFinite);
-  if (nums.length < 2) return null;
+  if (nums.length < 1) return null;
 
-  const pad = Math.ceil(lineWidth) + 2;
-  const min = Math.min(...nums);
+  const n = nums.length;
+  const slotW = width / n;
+  const barW = Math.max(1.5, slotW * 0.55);
   const max = Math.max(...nums);
+  const min = Math.min(...nums);
   const range = max - min || 1;
-  const plotW = width - pad * 2;
-  const plotH = height - pad * 2;
 
-  const points = nums.map((n, i) => {
-    const x = pad + plotW * (i / (nums.length - 1));
-    const y = pad + plotH * (1 - (n - min) / range);
-    return { x: +x.toFixed(2), y: +y.toFixed(2) };
-  });
+  const bars = nums.map((v, i) => {
+    const isSwitch = switchBooleans[i];
+    const color = isSwitch ? switchColor : normalColor;
+    const barH = Math.max(2, ((v - min) / range) * (height - 2));
+    const x = (i * slotW + (slotW - barW) / 2).toFixed(1);
+    const y = (height - barH).toFixed(1);
+    return `<rect x="${x}" y="${y}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="1.5" fill="${color}"/>`;
+  }).join('\n');
 
-  const bottom = height - pad;
-
-  // 渐变填充区（多边形近似，渐变层无需精确曲线）
-  const areaPts = points.map(p => `${p.x},${p.y}`).join(' ');
-  const area = `${areaPts} ${width - pad},${bottom} ${pad},${bottom}`;
-
-  // 贝塞尔曲线 — 控制点水平外扩 1/3 段距
-  let pathD = `M ${points[0].x},${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    const p0 = points[i - 1];
-    const p1 = points[i];
-    const dx = (p1.x - p0.x) / 3;
-    const cp1x = (p0.x + dx).toFixed(2);
-    const cp2x = (p1.x - dx).toFixed(2);
-    pathD += ` C ${cp1x},${p0.y} ${cp2x},${p1.y} ${p1.x},${p1.y}`;
-  }
-
-  // IP 切换标记
-  const circles = (switchIndices || [])
-    .filter(i => i < points.length)
-    .map(i => {
-      const p = points[i];
-      return `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${fillColor}" stroke="${color}" stroke-width="1"/>`;
-    })
-    .join('\n');
-
-  const svg =
-`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>
-    <linearGradient id="pulseFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${color}" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="${color}" stop-opacity="0"/>
-    </linearGradient>
-  </defs>
-  <polygon points="${area}" fill="url(#pulseFill)"/>
-  <path d="${pathD}" fill="none" stroke="${color}" stroke-width="${lineWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-  ${circles}
-</svg>`;
-
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${bars}</svg>`;
   return `data:image/svg+xml;base64,${b64(svg)}`;
 }
 
@@ -204,20 +168,17 @@ function addPoint(history, point) {
 // ── Widget 渲染 ───────────────────────────────
 
 function renderMedium(ctx, history, current) {
-  const switchIndices = history
-    .map((p, i) => (p.switched ? i : -1))
-    .filter(i => i >= 0);
+  const switchBooleans = history.map(p => p.switched);
   const latencies = history.map(p => p.latency);
 
-  const chartSrc = sparklineBezierSVG(latencies, switchIndices, {
-    color: C.accent,
-    fillColor: C.accentFill,
+  const chartSrc = sparklineBarSVG(latencies, switchBooleans, {
+    normalColor: '#3A3A3D',
+    switchColor: C.accent,
     width: 310,
     height: 90,
-    lineWidth: 2,
   });
 
-  const switchCount = switchIndices.length;
+  const switchCount = switchBooleans.filter(Boolean).length;
 
   return {
     type: 'widget',
