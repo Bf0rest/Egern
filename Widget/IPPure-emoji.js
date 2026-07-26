@@ -236,6 +236,7 @@ export default async function(ctx) {
       type: 'widget',
       padding: 4,
       gap: 2,
+      alignItems: 'center',
 
       children: [
 
