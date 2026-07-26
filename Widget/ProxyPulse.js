@@ -14,6 +14,8 @@
    *   （不填默认用 httpbin.org + ipify.org）
    * - IP_INTERVAL: IP 重新检测间隔（刷新次数，默认 3）
    *   延迟用 gstatic 每次测，IP 每 N 次刷新查一次
+   * - LATENCY_SPIKE: 延迟突变阈值（0-1，默认 0.6）
+   *   延迟变化 >60% 视为切换（应对同 IP 不同节点）
 *******************************/
 
 const LATENCY_URL = 'https://www.gstatic.com/generate_204';
@@ -158,9 +160,14 @@ function saveHistory(ctx, history) {
   } catch (_) {}
 }
 
-function addPoint(history, point) {
+function addPoint(history, point, spikeThreshold) {
   const prev = history.length ? history[history.length - 1] : null;
-  const switched = prev && prev.exitIP !== point.exitIP;
+  if (!prev) {
+    return [{ ...point, switched: false }];
+  }
+  const ipChanged = prev.exitIP !== point.exitIP;
+  const spike = Math.abs(point.latency - prev.latency) / Math.max(prev.latency, 1) > spikeThreshold;
+  const switched = ipChanged || spike;
   const updated = [...history, { ...point, switched }];
   return updated.slice(-24);
 }
@@ -245,7 +252,9 @@ function renderMedium(ctx, history, current) {
 // ── 入口 ──────────────────────────────────────
 
 export default async function (ctx) {
-  const group = (ctx.env || {}).GROUP || 'Proxy';
+  const env = ctx.env || {};
+  const group = env.GROUP || 'Proxy';
+  const spikeThreshold = parseFloat(env.LATENCY_SPIKE) || 0.6;
 
   try {
     const [latency, exitIP] = await Promise.all([
@@ -254,7 +263,7 @@ export default async function (ctx) {
     ]);
 
     let history = loadHistory(ctx);
-    history = addPoint(history, { time: Date.now(), latency, exitIP });
+    history = addPoint(history, { time: Date.now(), latency, exitIP }, spikeThreshold);
     saveHistory(ctx, history);
 
     const current = history[history.length - 1];
