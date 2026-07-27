@@ -156,10 +156,6 @@ export default async function(ctx) {
     risk4_warning: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOC41MjEsMTAuNDU4KXNjYWxlKDAuNTY0KSI+PHBhdGggZD0iTTMuODgsMjAuNDdBMS40NCwxLjQ0LDAsMCwxLDIuMzksMTlhMi4wNSwyLjA1LDAsMCwxLC4yMi0uOUwxMCwzLjA5YTEuNTcsMS41NywwLDAsMSwyLjk0LDBsNy40MiwxNWEyLjA1LDIuMDUsMCwwLDEsLjIyLjksMS40NywxLjQ3LDAsMCwxLS40MiwxLjA3LDEuNDUsMS40NSwwLDAsMS0xLjA3LjQyWm0wLS43MUgxOS4xMmEuNzcuNzcsMCwwLDAsLjU3LS4yMUEuNzMuNzMsMCwwLDAsMTkuOSwxOWExLjI2LDEuMjYsMCwwLDAtLjE1LS41OWwtNy40Mi0xNWEuOTEuOTEsMCwwLDAtLjgzLS42Mi45My45MywwLDAsMC0uODMuNjNsLTcuNDIsMTVhMS4zMywxLjMzLDAsMCwwLS4xNS42Ljc2Ljc2LDAsMCwwLC4yMS41NkEuOC44LDAsMCwwLDMuODgsMTkuNzZabTcuNjItNC4zYS40My40MywwLDAsMS0uNDQtLjM5bC0uNTUtNi43NmExLjIxLDEuMjEsMCwwLDEsLjI0LS45LDEsMSwwLDAsMSwxLjUxLDAsMS4yNywxLjI3LDAsMCwxLC4yMy45bC0uNTUsNi43NmEuMzYuMzYsMCwwLDEtLjEzLjI4QS40NC40NCwwLDAsMSwxMS41LDE1LjQ2Wm0wLDIuNDJhLjc5Ljc5LDAsMSwxLC41NC0uMjNBLjc0Ljc0LDAsMCwxLDExLjUsMTcuODhaIiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg==',
     risk5_poop: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNC4xOTIsNC4wOTEpc2NhbGUoMC44NzUpIj48cGF0aCBkPSJNMTEuNSwyMC40N0ExNC4xMSwxNC4xMSwwLDAsMSw3Ljg5LDIwLDkuNzcsOS43NywwLDAsMSw1LDE4Ljc4YTYsNiwwLDAsMS0xLjg3LTEuODksNC40NSw0LjQ1LDAsMCwxLS42Ny0yLjM5LDMuMjMsMy4yMywwLDAsMSwuNzItMi4xNSw0LjQzLDQuNDMsMCwwLDEsMi0xLjI5LDUuNTEsNS41MSwwLDAsMS0uMDctLjc5QTMuNDksMy40OSwwLDAsMSw1LjgsOC4xNGEzLjMzLDMuMzMsMCwwLDEsMS44My0xLjJWNi43N0E1LjYzLDUuNjMsMCwwLDEsOCw0LjY3YTMuNDgsMy40OCwwLDAsMSwxLjItMS40NkE5LjE4LDkuMTgsMCwwLDEsMTEuNSwyLjA3YTcuMSw3LjEsMCwwLDAsLjE0LDEuNTYsMS40OSwxLjQ5LDAsMCwwLC40OS44NywyLjQxLDIuNDEsMCwwLDAsMSwuNDJMMTMuNiw1YTQuNzMsNC43MywwLDAsMSwyLjI1LjkzLDIuMTYsMi4xNiwwLDAsMSwuNjksMS43LDIuMzksMi4zOSwwLDAsMSwwLC40NCwzLjM5LDMuMzksMCwwLDEtLjEuNDgsMi44OCwyLjg4LDAsMCwxLDEuMzQsMSwzLDMsMCwwLDEsLjUzLDEuNjUsNC4xOSw0LjE5LDAsMCwxLDEuNjYsMS4zNywzLjMzLDMuMzMsMCwwLDEsLjU5LDEuOTIsNC41Myw0LjUzLDAsMCwxLS42NiwyLjM5QTYuMDgsNi4wOCwwLDAsMSwxOCwxOC43OCw5Ljc3LDkuNzcsMCwwLDEsMTUuMSwyMCwxNC4wOSwxNC4wOSwwLDAsMSwxMS41LDIwLjQ3Wk05LDE0LjA5YTEuODYsMS44NiwwLDAsMCwxLS4yNywyLjA3LDIuMDcsMCwwLDAsLjcyLS43MiwxLjg5LDEuODksMCwwLDAsLjI3LTEsMS44NiwxLjg2LDAsMCwwLS4yNy0xQTIuMDcsMi4wNywwLDAsMCwxMCwxMC40YTEuODYsMS44NiwwLDAsMC0xLS4yNywxLjg5LDEuODksMCwwLDAtMSwuMjcsMi4wNywyLjA3LDAsMCwwLS43Mi43MiwxLjg2LDEuODYsMCwwLDAtLjI3LDEsMS44OSwxLjg5LDAsMCwwLC4yNywxLDIuMDcsMi4wNywwLDAsMCwuNzIuNzJBMS44OSwxLjg5LDAsMCwwLDksMTQuMDlaTTksMTNhLjkyLjkyLDAsMSwxLC45Mi0uOTJBLjk0Ljk0LDAsMCwxLDksMTNaTTExLjUsMTguMkEzLjcxLDMuNzEsMCwwLDAsMTIuNzMsMThhNC40Myw0LjQzLDAsMCwwLDEuMS0uNTgsMy4wOSwzLjA5LDAsMCwwLC43Ny0uODEsMS42OCwxLjY4LDAsMCwwLC4yOS0uOS42My42MywwLDAsMC0uMTEtLjM4LjM3LjM3LDAsMCwwLS4zNy0uMWMtLjYxLjA3LTEuMTMuMTMtMS41Ni4xNnMtLjg4LjA2LTEuMzUuMDYtLjkyLDAtMS4zNS0uMDYtMS0uMDktMS41Ni0uMTZhLjM3LjM3LDAsMCwwLS4zNy4xLjYzLjYzLDAsMCwwLS4xMS4zOCwxLjY4LDEuNjgsMCwwLDAsLjI5LjksMy4wOSwzLjA5LDAsMCwwLC43Ny44MSw0LjQzLDQuNDMsMCwwLDAsMS4xLjU4QTMuNzEsMy43MSwwLDAsMCwxMS41LDE4LjJaTTE0LDE0LjA5YTEuOSwxLjksMCwwLDAsMS0uMjcsMi4xMywyLjEzLDAsMCwwLC43MS0uNzIsMS44OSwxLjg5LDAsMCwwLC4yNy0xLDEuODYsMS44NiwwLDAsMC0uMjctMUEyLjEzLDIuMTMsMCwwLDAsMTUsMTAuNGEyLDIsMCwwLDAtMiwwLDIuMDcsMi4wNywwLDAsMC0uNzIuNzIsMS44NiwxLjg2LDAsMCwwLS4yNywxLDEuODksMS44OSwwLDAsMCwuMjcsMSwyLjA3LDIuMDcsMCwwLDAsLjcyLjcyQTEuODksMS44OSwwLDAsMCwxNCwxNC4wOVpNMTQsMTNhLjk0Ljk0LDAsMCwxLS45Mi0uOTJBLjkyLjkyLDAsMSwxLDE0LDEzWiIgZmlsbD0iI2ZmZiIvPjwvZz48L3N2Zz4='
   };
-  // Select icon by risk tier (SVGs pre-centered, no runtime transform needed)
-  function restoreSvgIcon(src) {
-    return src;
-  }
 
   let riskIcon = riskIconMap.risk5_poop;
   if      (riskScore <= 15) riskIcon = riskIconMap.risk0_house;
@@ -270,35 +266,26 @@ export default async function(ctx) {
   if (widgetFamily === 'accessoryCircular') {
 
     return {
-
       type: 'widget',
       padding: 4,
-      gap: 0,
-
       children: [
-
-        { type: 'spacer' },
-
         {
           type: 'stack',
-          direction: 'row',
+          direction: 'column',
+          alignItems: 'center',
           children: [
             { type: 'spacer' },
             {
               type: 'image',
-              src: restoreSvgIcon(riskIcon),
-              width: 36,
-              height: 36,
+              src: riskIcon,
+              width: 34,
+              height: 34,
               resizeMode: 'contain'
             },
             { type: 'spacer' }
           ]
-        },
-
-        { type: 'spacer' }
-
+        }
       ]
-
     };
 
   }
