@@ -765,7 +765,7 @@ export default async function(ctx) {
 
             {
               type: 'image',
-              src: 'sf-symbol:antenna.radiowaves.left.and.right',
+              src: 'sf-symbol:checkmark.circle.fill',
               width: 12,
               height: 12,
               color: C.green
@@ -773,7 +773,7 @@ export default async function(ctx) {
 
             {
               type: 'text',
-              text: latency,
+              text: 'Connection Active',
               font: { size: 'caption2' },
               textColor: C.secondary
             }
@@ -941,7 +941,7 @@ export default async function(ctx) {
 
           {
             type: 'image',
-            src: 'sf-symbol:antenna.radiowaves.left.and.right',
+            src: 'sf-symbol:checkmark.circle.fill',
             width: 12,
             height: 12,
             color: C.green
@@ -949,7 +949,7 @@ export default async function(ctx) {
 
           {
             type: 'text',
-            text: latency,
+            text: 'Connection Active',
             font: { size: 'caption2' },
             textColor: C.secondary
           }
