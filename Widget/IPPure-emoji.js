@@ -22,11 +22,11 @@ export default async function(ctx) {
 
     blue: '#60A5FA',
 
-    // IPPure 6 档风险色（自定义标签）
-    risk0: '#166534',  // 0-15   优质
-    risk1: '#22C55E',  // 15-25  良好
-    risk2: '#84CC16',  // 25-40  普通
-    risk3: '#EAB308',  // 40-50  低危
+    // IPPure 6 档风险色（绿→红渐进）
+    risk0: '#22C55E',  // 0-15   优质
+    risk1: '#84CC16',  // 15-25  良好
+    risk2: '#EAB308',  // 25-40  普通
+    risk3: '#F59E0B',  // 40-50  低危
     risk4: '#F97316',  // 50-70  中危
     risk5: '#DC2626',  // 70-100 高危
 
@@ -772,15 +772,15 @@ export default async function(ctx) {
 
             {
               type: 'image',
-              src: fromCache ? 'sf-symbol:clock.arrow.2.circlepath' : 'sf-symbol:antenna.radiowaves.left.and.right',
+              src: 'sf-symbol:antenna.radiowaves.left.and.right',
               width: 12,
               height: 12,
-              color: fromCache ? C.muted : C.green
+              color: C.green
             },
 
             {
               type: 'text',
-              text: fromCache ? ('缓存 · ' + latency) : ('延迟 · ' + latency),
+              text: latency,
               font: { size: 'caption2' },
               textColor: C.secondary
             }
@@ -948,15 +948,15 @@ export default async function(ctx) {
 
           {
             type: 'image',
-            src: fromCache ? 'sf-symbol:clock.arrow.2.circlepath' : 'sf-symbol:antenna.radiowaves.left.and.right',
+            src: 'sf-symbol:antenna.radiowaves.left.and.right',
             width: 12,
             height: 12,
-            color: fromCache ? C.muted : C.green
+            color: C.green
           },
 
           {
             type: 'text',
-            text: fromCache ? ('缓存 · ' + latency) : ('延迟 · ' + latency),
+            text: latency,
             font: { size: 'caption2' },
             textColor: C.secondary
           }
