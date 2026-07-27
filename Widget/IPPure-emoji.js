@@ -165,9 +165,7 @@ export default async function(ctx) {
 
     const svg = atob(src.slice(prefix.length))
       .replace(/<g transform="[^"]*">/, '')
-      .replace('</g>', '')
-      // Circular 会限制 image 外层尺寸；收紧 viewBox 才能真正放大路径。
-      .replace('viewBox="0 0 24 24"', 'viewBox="0 0 21 21"');
+      .replace('</g>', '');
 
     return prefix + btoa(svg);
   }
@@ -298,8 +296,8 @@ export default async function(ctx) {
             {
               type: 'image',
               src: restoreSvgIcon(riskIcon),
-              width: 30,
-              height: 30,
+              width: 44,
+              height: 44,
               resizeMode: 'cover'
             },
             { type: 'spacer' }
