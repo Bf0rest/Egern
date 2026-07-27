@@ -266,26 +266,10 @@ export default async function(ctx) {
   if (widgetFamily === 'accessoryCircular') {
 
     return {
-      type: 'widget',
-      padding: 4,
-      children: [
-        {
-          type: 'stack',
-          direction: 'column',
-          alignItems: 'center',
-          children: [
-            { type: 'spacer' },
-            {
-              type: 'image',
-              src: riskIcon,
-              width: 34,
-              height: 34,
-              resizeMode: 'contain'
-            },
-            { type: 'spacer' }
-          ]
-        }
-      ]
+      type: 'image',
+      src: riskIcon,
+      width: 34,
+      height: 34
     };
 
   }
