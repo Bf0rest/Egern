@@ -158,13 +158,7 @@ export default async function(ctx) {
   };
   // Select icon by risk tier (SVGs pre-centered, no runtime transform needed)
   function restoreSvgIcon(src) {
-    const prefix = 'data:image/svg+xml;base64,';
-    if (!src || src.indexOf(prefix) !== 0) return src;
-    const svg = atob(src.slice(prefix.length))
-      .replace(/<g transform="[^"]*">/, '')
-      .replace('</g>', '')
-      .replace('viewBox="0 0 24 24"', 'viewBox="0 0 21 21"');
-    return prefix + btoa(svg);
+    return src;
   }
 
   let riskIcon = riskIconMap.risk5_poop;
