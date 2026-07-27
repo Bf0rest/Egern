@@ -268,8 +268,8 @@ export default async function(ctx) {
     return {
       type: 'image',
       src: riskIcon,
-      width: 34,
-      height: 34
+      width: 40,
+      height: 40
     };
 
   }
