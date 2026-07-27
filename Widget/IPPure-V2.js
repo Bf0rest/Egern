@@ -44,6 +44,12 @@ export default async function(ctx) {
 
 
   let data = null;
+  let fromCache = false;
+  let latency = '--';
+  const CACHE_TTL = 3600000;
+  const cacheKey = 'ippure_' + strategyGroup;
+
+  const t0 = Date.now();
 
   try {
 
@@ -56,8 +62,52 @@ export default async function(ctx) {
     );
 
     data = await resp.json();
+    latency = (Date.now() - t0) + 'ms';
 
-  } catch(e) {}
+    try {
+      ctx.storage.setJSON(cacheKey, { ...data, ts: Date.now() });
+    } catch(_) {}
+
+  } catch(e) {
+
+    latency = (Date.now() - t0) + 'ms';
+
+    try {
+      const cached = ctx.storage.getJSON(cacheKey);
+      if (cached) {
+        data = cached;
+        fromCache = true;
+        const ageMin = Math.round((Date.now() - cached.ts) / 60000);
+        latency = ageMin ? '缓存 ' + ageMin + 'min' : '缓存';
+      }
+    } catch(_) {}
+
+    if (!data) {
+      try {
+        const ipResp = await ctx.http.get(
+          'https://httpbin.org/ip',
+          { policy: strategyGroup, timeout: 5000 }
+        );
+        const ipBody = await ipResp.json();
+        const ip = ipBody.origin || '--';
+        const asn = $utils.ipasn(ip);
+        data = {
+          ip: ip,
+          asn: asn ? String(asn) : '---',
+          asOrganization: 'IPASN',
+          country: '--',
+          region: '',
+          city: '',
+          fraudScore: 0,
+          isResidential: false,
+          isBroadcast: false
+        };
+        latency = 'ipasn';
+        fromCache = true;
+      } catch(_) {}
+    }
+
+  }
 
 
   if (!data) {
@@ -715,18 +765,16 @@ export default async function(ctx) {
 
             {
               type: 'image',
-              src: 'sf-symbol:checkmark.circle.fill',
+              src: fromCache ? 'sf-symbol:clock.arrow.2.circlepath' : 'sf-symbol:antenna.radiowaves.left.and.right',
               width: 12,
               height: 12,
-              color: C.green
+              color: fromCache ? C.muted : C.green
             },
 
             {
               type: 'text',
-              text: 'Connection Active',
-              font: {
-                size: 'caption2'
-              },
+              text: fromCache ? ('缓存 · ' + latency) : ('延迟 · ' + latency),
+              font: { size: 'caption2' },
               textColor: C.secondary
             }
 
@@ -893,18 +941,16 @@ export default async function(ctx) {
 
           {
             type: 'image',
-            src: 'sf-symbol:checkmark.circle.fill',
+            src: fromCache ? 'sf-symbol:clock.arrow.2.circlepath' : 'sf-symbol:antenna.radiowaves.left.and.right',
             width: 12,
             height: 12,
-            color: C.green
+            color: fromCache ? C.muted : C.green
           },
 
           {
             type: 'text',
-            text: 'Connection Active',
-            font: {
-              size: 'caption2'
-            },
+            text: fromCache ? ('缓存 · ' + latency) : ('延迟 · ' + latency),
+            font: { size: 'caption2' },
             textColor: C.secondary
           }
 
