@@ -1,8 +1,3 @@
-build/
-SKILL.md
-AGENTS.md
-Widget/IPPure.js
-references/
-scripts/
-templates/
-Widget/icons/
+*
+!.gitignore
+!Widget
