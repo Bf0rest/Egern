@@ -268,15 +268,9 @@ export default async function(ctx) {
 
     return {
       type: 'widget',
-      padding: 4,
+
       children: [
-        {
-          type: 'image',
-          src: riskIcon,
-          width: 36,
-          height: 36,
-          resizeMode: 'contain'
-        }
+        { type: 'image', src: riskIcon }
       ]
     };
   }
