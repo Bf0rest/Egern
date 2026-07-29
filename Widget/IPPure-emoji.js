@@ -1,6 +1,14 @@
-// 添加环境变量，名称：GROUP，值：策略组名称
-// IPPure 6-tier risk labels (优质/良好/普通/低危/中危/高危)
-
+// IPPure — 代理 IP 风险评分小组件（Noto 单色图标版）
+// ====================================================
+// 环境变量（在 Widget 配置中设置）：
+//   GROUP  — 策略组名称，默认 DIRECT
+//   STYLE  — "glass" 启用透明背景
+//   SOURCE — "local" 启用本地 GeoLite2 ASN 查询
+// 锁屏：accessoryCircular(图标), Rectangular, Inline
+// 桌面：systemSmall, Medium, Large, ExtraLarge(iPad)
+// API: my.ippure.com/v1/info
+// 风险评分: 优质(≤15) 良好(≤25) 普通(≤40) 低危(≤50) 中危(≤70) 高危(>70)
+//
 export default async function(ctx) {
 
   const strategyGroup =
@@ -8,6 +16,11 @@ export default async function(ctx) {
 
   const widgetFamily =
     ctx.widgetFamily || 'systemLarge';
+
+  const isGlass =
+    (ctx.env.STYLE || '').toLowerCase() === 'glass';
+
+  const ispSource = (ctx.env.SOURCE || '').toLowerCase();
 
 
   const C = {
@@ -41,14 +54,29 @@ export default async function(ctx) {
     endPoint: { x: 0.5, y: 1 }
   };
 
+  const bg = isGlass ? {} : { backgroundGradient: premiumGradient };
 
   let data = null;
-  let fromCache = false;
-  let latency = '--';
   const CACHE_TTL = 3600000;
   const cacheKey = 'ippure_' + strategyGroup;
 
-  const t0 = Date.now();
+  // 双路径 ASN 查询：$utils.ipaso → $utils.ipasn → ctx.lookupIP 兜底
+  function lookupLocalASN(ip) {
+    try {
+      const org = $utils.ipaso(ip);
+      if (org) return String(org);
+    } catch(_) {}
+    try {
+      const num = $utils.ipasn(ip);
+      if (num) return 'AS' + String(num);
+    } catch(_) {}
+    try {
+      const lookup = ctx.lookupIP(ip);
+      if (lookup && lookup.asOrganization) return String(lookup.asOrganization);
+      if (lookup && lookup.asn) return String(lookup.asn);
+    } catch(_) {}
+    return null;
+  }
 
   try {
 
@@ -60,40 +88,53 @@ export default async function(ctx) {
       }
     );
 
+    if (resp.status !== 200) {
+      throw new Error('HTTP ' + resp.status);
+    }
+
     data = await resp.json();
-    latency = (Date.now() - t0) + 'ms';
+
+    if (data && typeof data.fraudScore !== 'undefined') {
+      let s = Number(data.fraudScore);
+      if (!Number.isFinite(s)) s = 99;
+      data.fraudScore = Math.max(0, Math.min(100, s));
+    }
 
     try {
       ctx.storage.setJSON(cacheKey, { ...data, ts: Date.now() });
     } catch(_) {}
 
+    // ISP 信息覆盖 — SOURCE=local 时从本地 GeoLite2 数据库查询
+    if (ispSource === 'local' && data.ip) {
+      const org = lookupLocalASN(data.ip);
+      if (org) data.asOrganization = org;
+    }
+
   } catch(e) {
 
-    latency = (Date.now() - t0) + 'ms';
-
+    // 主请求失败：尝试从缓存读取（验证 TTL）
     try {
       const cached = ctx.storage.getJSON(cacheKey);
-      if (cached) {
+      if (cached && Date.now() - cached.ts <= CACHE_TTL) {
         data = cached;
-        fromCache = true;
-        const ageMin = Math.round((Date.now() - cached.ts) / 60000);
-        latency = ageMin ? '缓存 ' + ageMin + 'min' : '缓存';
       }
     } catch(_) {}
 
+    // 无缓存或缓存过期：httpbin + ipasn 兜底
     if (!data) {
       try {
         const ipResp = await ctx.http.get(
           'https://httpbin.org/ip',
           { policy: strategyGroup, timeout: 5000 }
         );
+        if (ipResp.status !== 200) throw new Error('HTTP ' + ipResp.status);
         const ipBody = await ipResp.json();
         const ip = ipBody.origin || '--';
         const asn = $utils.ipasn(ip);
         data = {
           ip: ip,
           asn: asn ? String(asn) : '---',
-          asOrganization: 'IPASN',
+          asOrganization: lookupLocalASN(ip) || 'IPASN',
           country: '--',
           region: '',
           city: '',
@@ -101,8 +142,6 @@ export default async function(ctx) {
           isResidential: false,
           isBroadcast: false
         };
-        latency = 'ipasn';
-        fromCache = true;
       } catch(_) {}
     }
 
@@ -126,7 +165,9 @@ export default async function(ctx) {
 
 
   const riskScore =
-    Number(data.fraudScore || 0);
+    Number.isFinite(data.fraudScore)
+      ? Math.max(0, Math.min(100, data.fraudScore))
+      : 99;
 
   let riskText = '高危';
   let riskColor = C.risk5;
@@ -220,7 +261,9 @@ export default async function(ctx) {
             weight: 'medium'
           },
           textColor: valueColor || C.secondary,
-          textAlign: 'right'
+          textAlign: 'right',
+          maxLines: 1,
+          minScale: 0.75
         }
 
       ]
@@ -296,7 +339,8 @@ export default async function(ctx) {
             weight: 'semibold'
           },
           textColor: C.text,
-          maxLine: 1
+          maxLines: 1,
+          minScale: 0.75
         },
 
         {
@@ -307,7 +351,8 @@ export default async function(ctx) {
             weight: 'medium'
           },
           textColor: C.secondary,
-          maxLine: 1
+          maxLines: 1,
+          minScale: 0.7
         },
 
         {
@@ -318,11 +363,11 @@ export default async function(ctx) {
             weight: 'medium'
           },
           textColor: networkColor,
-          maxLine: 1
+          maxLines: 1,
+          minScale: 0.7
         }
 
       ]
-
     };
 
   }
@@ -347,7 +392,8 @@ export default async function(ctx) {
             weight: 'semibold'
           },
           textColor: C.text,
-          maxLine: 1
+          maxLines: 1,
+          minScale: 0.7
         }
 
       ]
@@ -365,10 +411,9 @@ export default async function(ctx) {
     return {
 
       type: 'widget',
-      backgroundGradient: premiumGradient,
-      border: { width: 1, color: C.borderColor },
-      padding: 16,
-      gap: 10,
+      ...bg,
+      padding: [16, 16, 8, 16],
+      gap: 6,
 
       children: [
 
@@ -398,7 +443,9 @@ export default async function(ctx) {
                     size: 'caption1',
                     weight: 'bold'
                   },
-                  textColor: C.blue
+                  textColor: C.blue,
+                  maxLines: 1,
+                  minScale: 0.75
                 }
 
               ]
@@ -408,16 +455,52 @@ export default async function(ctx) {
         },
 
         {
-          type: 'text',
-          text: data.country || 'Unknown',
-          font: {
-            size: 15,
-            weight: 'semibold'
-          },
-          textColor: C.text
+          type: 'spacer',
+          length: 1
         },
 
-        badge(networkText, networkColor),
+        {
+          type: 'stack',
+          direction: 'column',
+          alignItems: 'start',
+          children: [
+
+            {
+              type: 'text',
+              text: data.ip && data.ip.includes(':') ? 'IPV6 NETWORK' : (data.ip || 'N/A'),
+              font: {
+                size: 20,
+                weight: 'heavy'
+              },
+              textColor: C.text,
+              minScale: 0.7,
+              maxLines: 1
+            },
+
+            {
+              type: 'spacer',
+              length: 3
+            },
+
+            {
+              type: 'text',
+              text: data.country || 'Unknown',
+              font: {
+                size: 'caption1',
+                weight: 'bold'
+              },
+              textColor: C.muted
+            },
+
+            {
+              type: 'spacer',
+              length: 4
+            },
+
+            badge(networkText, networkColor)
+
+          ]
+        },
 
         {
           type: 'spacer'
@@ -426,26 +509,13 @@ export default async function(ctx) {
         {
           type: 'stack',
           direction: 'row',
-          gap: 8,
+          alignItems: 'end',
           children: [
 
             {
-              type: 'text',
-              text: String(riskScore),
-              font: {
-                size: 30,
-                weight: 'bold'
-              },
-              textColor: riskColor
-            },
-
-            {
               type: 'stack',
+              padding: [0, 0, 5, 0],
               children: [
-
-                {
-                  type: 'spacer'
-                },
 
                 {
                   type: 'text',
@@ -458,6 +528,20 @@ export default async function(ctx) {
                 }
 
               ]
+            },
+
+            {
+              type: 'spacer'
+            },
+
+            {
+              type: 'text',
+              text: String(riskScore),
+              font: {
+                size: 34,
+                weight: 'bold'
+              },
+              textColor: riskColor
             }
 
           ]
@@ -468,7 +552,6 @@ export default async function(ctx) {
     };
 
   }
-
   // ============================================
   // MEDIUM
   // ============================================
@@ -478,8 +561,9 @@ export default async function(ctx) {
     return {
 
       type: 'widget',
-      backgroundGradient: premiumGradient,
-      border: { width: 1, color: C.borderColor },
+      ...bg,
+      borderWidth: 1,
+      borderColor: C.borderColor,
       padding: 18,
       gap: 10,
 
@@ -528,7 +612,9 @@ export default async function(ctx) {
                 size: 'caption1',
                 weight: 'bold'
               },
-              textColor: C.blue
+              textColor: C.blue,
+              maxLines: 1,
+              minScale: 0.75
             }
 
           ]
@@ -541,7 +627,9 @@ export default async function(ctx) {
             size: 24,
             weight: 'bold'
           },
-          textColor: C.text
+          textColor: C.text,
+          maxLines: 1,
+          minScale: 0.65
         },
 
         {
@@ -572,7 +660,9 @@ export default async function(ctx) {
               font: {
                 size: 'subheadline'
               },
-              textColor: C.secondary
+              textColor: C.secondary,
+              maxLines: 1,
+              minScale: 0.75
             },
 
             {
@@ -607,8 +697,9 @@ export default async function(ctx) {
     return {
 
       type: 'widget',
-      backgroundGradient: premiumGradient,
-      border: { width: 1, color: C.borderColor },
+      ...bg,
+      borderWidth: 1,
+      borderColor: C.borderColor,
       padding: 22,
       gap: 16,
 
@@ -657,7 +748,9 @@ export default async function(ctx) {
                 size: 'caption1',
                 weight: 'bold'
               },
-              textColor: C.blue
+              textColor: C.blue,
+              maxLines: 1,
+              minScale: 0.75
             }
 
           ]
@@ -680,7 +773,9 @@ export default async function(ctx) {
             size: 36,
             weight: 'bold'
           },
-          textColor: C.text
+          textColor: C.text,
+          maxLines: 1,
+          minScale: 0.65
         },
 
         {
@@ -763,8 +858,9 @@ export default async function(ctx) {
   return {
 
     type: 'widget',
-    backgroundGradient: premiumGradient,
-    border: { width: 1, color: C.borderColor },
+    ...bg,
+    borderWidth: 1,
+    borderColor: C.borderColor,
     padding: 20,
     gap: 14,
 
@@ -813,7 +909,9 @@ export default async function(ctx) {
               size: 'caption1',
               weight: 'bold'
             },
-            textColor: C.blue
+            textColor: C.blue,
+            maxLines: 1,
+            minScale: 0.75
           }
 
         ]
@@ -836,7 +934,9 @@ export default async function(ctx) {
           size: 32,
           weight: 'bold'
         },
-        textColor: C.text
+        textColor: C.text,
+        maxLines: 1,
+        minScale: 0.65
       },
 
       {
