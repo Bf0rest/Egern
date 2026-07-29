@@ -4,10 +4,6 @@
 //   GROUP  — 策略组名称，默认 DIRECT
 //   STYLE  — "glass" 启用透明背景
 //   SOURCE — "local" 启用本地 GeoLite2 ASN 查询
-// 锁屏：accessoryCircular(图标), Rectangular, Inline
-// 桌面：systemSmall, Medium, Large, ExtraLarge(iPad)
-// API: my.ippure.com/v1/info
-// 风险评分: 优质(≤15) 良好(≤25) 普通(≤40) 低危(≤50) 中危(≤70) 高危(>70)
 //
 export default async function(ctx) {
 
