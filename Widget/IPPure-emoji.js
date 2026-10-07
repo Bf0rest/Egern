@@ -5,7 +5,72 @@
 //   STYLE  — "glass" 启用透明背景
 //   SOURCE — "local" 启用本地 GeoLite2 ASN 查询
 //
-export default async function(ctx) {
+// 刷新策略相关（单位：分钟，除 PROBE_URL / NETWORK_AWARE / FORCE 外）：
+//   PROBE          出口 IP 检测间隔，默认 0 = 每次渲染都检测。
+//                  调大可压请求量，但会牺牲换节点 / 手动刷新的实时性。
+//   PROBE_URL      自定义出口 IP 探测地址，需返回含 ip= 的纯文本或 {ip|origin} 的 JSON
+//   REFRESH        refreshAfter 建议值，默认 30；设 0 则完全不设置，交给系统。
+//                  只影响「系统多久愿意再叫醒脚本一次」，不参与数据新鲜度判断。
+//   TTL            出口 IP 没变时的重新打分区间，默认 720（12 小时）；设 0 则只在换 IP 时重打
+//   MAX_AGE        陈旧数据可接受上限，默认 1440（24 小时），用于取数失败兜底
+//   RETRY          取数失败后的重试间隔，默认 15
+//   NETWORK_AWARE  设为 1 时，Wi-Fi / 蜂窝链路变化会立即触发一次检测
+//   FORCE          设为 1 完全回到最初的行为：每次渲染都打完整接口，不做任何缓存判定
+//
+// 思路：昂贵的打分请求只在「出口 IP 变了」或「TTL 到期」时才发，
+// 其余渲染只花一次约 200 字节的探测。
+let __nextRefreshAt = null;
+
+function __numEnv(raw, def, lo, hi) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+// 极轻量出口 IP 探测：失败返回 null（交给调用方决定要不要重试完整接口）
+async function __probeEgressIp(c, group, url) {
+  try {
+    const resp = await c.http.get(url, { policy: group, timeout: 5000 });
+    if (resp.status !== 200) return null;
+    const text = await resp.text();
+    const m = /(?:^|\n)ip=([^\s\r\n]+)/.exec(text);
+    if (m) return m[1];
+    try {
+      const j = JSON.parse(text);
+      if (j && (j.ip || j.origin)) return String(j.ip || j.origin);
+    } catch (_) {}
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function __linkSignature(c) {
+  try {
+    const d = c.device || {};
+    const wifi = d.wifi || {};
+    const cell = d.cellular || {};
+    const ip4 = d.ipv4 || {};
+    return [
+      wifi.bssid || wifi.ssid || '',
+      cell.radio || cell.carrier || '',
+      ip4.interface || ''
+    ].join('|');
+  } catch (_) { return ''; }
+}
+
+function __ageText(ms) {
+  const min = Math.round(ms / 60000);
+  if (min < 1) return '刚刚';
+  if (min < 60) return min + ' 分钟前';
+  const hr = Math.floor(min / 60);
+  return hr < 24 ? hr + ' 小时前' : Math.floor(hr / 24) + ' 天前';
+}
+
+async function __render(ctx) {
+
+  // 模块级变量，每次渲染都要重置，否则 REFRESH=0 时会残留上一次的值
+  __nextRefreshAt = null;
 
   const strategyGroup =
     ctx.env.GROUP || 'DIRECT';
@@ -52,9 +117,52 @@ export default async function(ctx) {
 
   const bg = isGlass ? {} : { backgroundGradient: premiumGradient };
 
+  const probeMin   = __numEnv(ctx.env.PROBE, 0, 0, 720);
+  const rescoreMin = __numEnv(ctx.env.TTL, 720, 0, 10080);
+  const refreshMin = __numEnv(ctx.env.REFRESH, 30, 0, 1440);
+  const maxAgeMin  = __numEnv(ctx.env.MAX_AGE, 1440, 60, 10080);
+  const retryMin   = __numEnv(ctx.env.RETRY, 15, 1, 120);
+  const netAware   = ctx.env.NETWORK_AWARE === '1';
+  const probeUrl   = ctx.env.PROBE_URL || 'https://cloudflare.com/cdn-cgi/trace';
+  const forceAlways = ctx.env.FORCE === '1';
+
+  // 锁屏类重绘更频繁，节奏放宽一倍
+  const accessory     = /^accessory/.test(ctx.widgetFamily || '');
+  const effProbeMs    = (accessory ? Math.min(probeMin * 2, 720) : probeMin) * 60000;
+  const effRefreshMin = refreshMin;
+
   let data = null;
-  const CACHE_TTL = 3600000;
+  let fresh = false;
+  let attemptFailed = false;
+  let checked = false;
+  let dataAge = 0;
+
   const cacheKey = 'ippure_' + strategyGroup;
+  const linkSig  = __linkSignature(ctx);
+
+  async function fetchScore() {
+    const resp = await ctx.http.get(
+      'https://my.ippure.com/v1/info',
+      { policy: strategyGroup, timeout: 8000 }
+    );
+    if (resp.status !== 200) throw new Error('HTTP ' + resp.status);
+    const body = await resp.json();
+    if (!body || typeof body !== 'object') throw new Error('bad body');
+    return body;
+  }
+
+  function writeCache(d, keepTs, probeIp) {
+    try {
+      ctx.storage.setJSON(cacheKey, {
+        ...d,
+        ts: keepTs || Date.now(),
+        checkTs: Date.now(),
+        probeIp: probeIp || null,
+        ok: true,
+        sig: linkSig
+      });
+    } catch(_) {}
+  }
 
   // 双路径 ASN 查询：$utils.ipaso → $utils.ipasn → ctx.lookupIP 兜底
   function lookupLocalASN(ip) {
@@ -74,49 +182,82 @@ export default async function(ctx) {
     return null;
   }
 
-  try {
+  let cached = null;
+  try { cached = ctx.storage.getJSON(cacheKey); } catch(_) {}
 
-    const resp = await ctx.http.get(
-      'https://my.ippure.com/v1/info',
-      {
-        policy: strategyGroup,
-        timeout: 8000
+  const cacheAge    = cached && cached.ts ? Date.now() - cached.ts : Infinity;
+  const cacheUsable = !!cached && cacheAge <= maxAgeMin * 60000;
+
+  // 新鲜度由「出口 IP 是否变化」决定，不由时间决定。
+  const sinceCheck = cached && cached.checkTs ? Date.now() - cached.checkTs : Infinity;
+  const due = forceAlways
+    || !cached
+    || sinceCheck >= effProbeMs
+    || (netAware && cached.sig !== linkSig);
+
+  if (!due) {
+
+    // 未到检测窗口：纯读缓存，一次网络请求都不发
+    data = cached;
+    dataAge = cacheAge;
+
+  } else {
+
+    checked = true;
+
+    // 先确认当前出口 IP：换节点 = 出口 IP 变化，这一步能发现。FORCE=1 时跳过。
+    const egressIp = !forceAlways
+      ? await __probeEgressIp(ctx, strategyGroup, probeUrl)
+      : null;
+
+    // 比对必须同源：只和「上次 trace 记下的 probeIp」比，不能和 cached.ip（IPPure 返回的）比 ——
+    // 两个服务看到的出口未必一致（IPv4/IPv6 双栈、分流差异），混着比会误判成「IP 变了」而白打打分请求。
+    // 旧缓存没有 probeIp 时补打一次建立基准。
+    const lastProbeIp = (cached && cached.probeIp) || null;
+    const baseMissing = !!cached && !lastProbeIp;
+    const ipChanged   = !!cached && !!egressIp && !!lastProbeIp
+                        && String(egressIp) !== String(lastProbeIp);
+    const rescoreDue  = rescoreMin > 0 && cacheAge > rescoreMin * 60000;
+
+    if (!cached || baseMissing || ipChanged || rescoreDue || egressIp === null) {
+
+      try {
+
+        const body = await fetchScore();
+
+        data = body;
+        fresh = true;
+
+        if (typeof data.fraudScore !== 'undefined') {
+          let s = Number(data.fraudScore);
+          if (!Number.isFinite(s)) s = 99;
+          data.fraudScore = Math.max(0, Math.min(100, s));
+        }
+
+        writeCache(data, Date.now(), egressIp);
+
+      } catch(e) {
+
+        attemptFailed = true;
+
+        // stale-if-error：取数失败优先沿用旧值，别把小组件刷成错误态
+        if (cacheUsable) {
+          data = cached;
+          dataAge = cacheAge;
+        }
+
       }
-    );
 
-    if (resp.status !== 200) {
-      throw new Error('HTTP ' + resp.status);
+    } else {
+
+      // 出口 IP 没变：数据仍然有效，只把检测时间往前推，不打完整接口
+      data = cached;
+      dataAge = cacheAge;
+      writeCache(cached, cached.ts || Date.now(), egressIp);
+
     }
 
-    data = await resp.json();
-
-    if (data && typeof data.fraudScore !== 'undefined') {
-      let s = Number(data.fraudScore);
-      if (!Number.isFinite(s)) s = 99;
-      data.fraudScore = Math.max(0, Math.min(100, s));
-    }
-
-    try {
-      ctx.storage.setJSON(cacheKey, { ...data, ts: Date.now() });
-    } catch(_) {}
-
-    // ISP 信息覆盖 — SOURCE=local 时从本地 GeoLite2 数据库查询
-    if (ispSource === 'local' && data.ip) {
-      const org = lookupLocalASN(data.ip);
-      if (org) data.asOrganization = org;
-    }
-
-  } catch(e) {
-
-    // 主请求失败：尝试从缓存读取（验证 TTL）
-    try {
-      const cached = ctx.storage.getJSON(cacheKey);
-      if (cached && Date.now() - cached.ts <= CACHE_TTL) {
-        data = cached;
-      }
-    } catch(_) {}
-
-    // 无缓存或缓存过期：httpbin + ipasn 兜底
+    // 无缓存且主请求也失败：httpbin + 本地 GeoIP 兜底
     if (!data) {
       try {
         const ipResp = await ctx.http.get(
@@ -141,6 +282,22 @@ export default async function(ctx) {
       } catch(_) {}
     }
 
+  }
+
+  // SOURCE=local 时用本地 GeoLite2 覆盖 ISP；放最后施加，避免污染缓存里的服务端原值
+  if (data && ispSource === 'local' && data.ip) {
+    const org = lookupLocalASN(data.ip);
+    if (org) data.asOrganization = org;
+  }
+
+  // REFRESH=0 表示完全不设置 refreshAfter。末尾加 ±5% 抖动，避免多个实例同时醒来。
+  let nextMs = attemptFailed ? retryMin * 60000 : effRefreshMin * 60000;
+  if (!attemptFailed && refreshMin <= 0) {
+    nextMs = 0;
+  } else {
+    if (!Number.isFinite(nextMs) || nextMs < 60000) nextMs = 60000;
+    nextMs = Math.min(nextMs, 1440 * 60000) * (0.95 + Math.random() * 0.1);
+    __nextRefreshAt = Date.now() + nextMs;
   }
 
 
@@ -1025,5 +1182,19 @@ export default async function(ctx) {
     ]
 
   };
+
+}
+
+export default async function(ctx) {
+
+  let widget = await __render(ctx);
+
+  // 统一注入下一次刷新时刻，覆盖所有尺寸分支。
+  // 锁屏圆形分支返回的是裸 image 根，不能包成 widget（会导致图标位移），直接挂在根节点上。
+  if (widget && __nextRefreshAt) {
+    widget.refreshAfter = new Date(__nextRefreshAt).toISOString();
+  }
+
+  return widget;
 
 }
