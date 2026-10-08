@@ -12,8 +12,6 @@
 //   RETRY          取数失败后的重试间隔，默认 15
 //   NETWORK_AWARE  设为 1 时，Wi-Fi / 蜂窝链路变化会立即触发一次检测
 //   FORCE          设为 1 完全回到最初的行为：每次渲染都打完整接口，不做任何缓存判定
-//
-// 思路：昂贵的打分请求只在「出口 IP 变了」或「TTL 到期」时才发，其余渲染只花一次约 200 字节的探测。
 let __nextRefreshAt = null;
 
 function __numEnv(raw, def, lo, hi) {
