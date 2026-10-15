@@ -1,13 +1,15 @@
 // IPPure — 代理 IP 风险评分小组件（Noto 单色图标版）
 //
-// 环境变量（在 Widget 配置里填，全部可留空）：
-//   GROUP     默认 DIRECT                                  —— 策略组名称
-//   STYLE     默认 留空                                    —— glass = 透明背景
-//   SOURCE    默认 留空                                    —— local = 用本地 GeoLite2 库查 ASN
-//   PROBE_URL 默认 https://cloudflare.com/cdn-cgi/trace    —— 自定义出口 IP 探测地址
-//   IP        默认 留空 = 不脱敏                            —— HIDE / 隐藏 / 脱敏
-//                 IPv4 104.28.213.57 → 104.*.*.57；IPv6 2400:cb00:2048:1::681c:d55 → 2400:****:d55
-//                 （只改显示；探测、缓存键、请求口径一律不动）
+// 环境变量（在 Widget 配置里按需填写）：
+//   GROUP     —— 策略组名称
+//
+//   STYLE     —— glass = 透明背景（需配合透明图标风格）
+//
+//   SOURCE    —— local = 用本地 GeoLite2 库查 ASN
+//
+//   PROBE_URL —— 自定义出口 IP 探测地址，默认 https://cloudflare.com/cdn-cgi/trace
+//
+//   IP        —— HIDE = 隐藏组件中IP的中段信息
 
 const __ISP_MAX = { large: 42, rect: 24 };            // 按本组件版式算得
 
