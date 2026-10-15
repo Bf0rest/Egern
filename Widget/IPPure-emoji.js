@@ -1,28 +1,76 @@
 // IPPure — 代理 IP 风险评分小组件（Noto 单色图标版）
-// ====================================================
-// 环境变量（在 Widget 配置中设置）：
-//   GROUP  — 策略组名称，默认 DIRECT
-//   STYLE  — "glass" 启用透明背景
-//   SOURCE — "local" 启用本地 GeoLite2 ASN 查询
 //
-// 刷新策略相关（单位：分钟，除 PROBE_URL / NETWORK_AWARE / FORCE 外）：
-//   PROBE          出口 IP 检测间隔，默认 0 = 每次渲染都检测。
-//                  调大可压请求量，但会牺牲换节点 / 手动刷新的实时性。
-//   PROBE_URL      自定义出口 IP 探测地址，需返回含 ip= 的纯文本或 {ip|origin} 的 JSON
-//   REFRESH        refreshAfter 建议值，默认 30；设 0 则完全不设置，交给系统。
-//                  只影响「系统多久愿意再叫醒脚本一次」，不参与数据新鲜度判断。
-//   TTL            出口 IP 没变时的重新打分区间，默认 720（12 小时）；设 0 则只在换 IP 时重打
-//   MAX_AGE        陈旧数据可接受上限，默认 1440（24 小时），用于取数失败兜底
-//   RETRY          取数失败后的重试间隔，默认 15
-//   NETWORK_AWARE  设为 1 时，Wi-Fi / 蜂窝链路变化会立即触发一次检测
-//   FORCE          设为 1 完全回到最初的行为：每次渲染都打完整接口，不做任何缓存判定
-let __nextRefreshAt = null;
+// 环境变量（在 Widget 配置里填，全部可留空）：
+//   GROUP     默认 DIRECT                                  —— 策略组名称
+//   STYLE     默认 留空                                    —— glass = 透明背景
+//   SOURCE    默认 留空                                    —— local = 用本地 GeoLite2 库查 ASN
+//   PROBE_URL 默认 https://cloudflare.com/cdn-cgi/trace    —— 自定义出口 IP 探测地址
+//   IP        默认 留空 = 不脱敏                            —— HIDE / 隐藏 / 脱敏
+//                 IPv4 104.28.213.57 → 104.*.*.57；IPv6 2400:cb00:2048:1::681c:d55 → 2400:****:d55
+//                 （只改显示；探测、缓存键、请求口径一律不动）
 
-function __numEnv(raw, def, lo, hi) {
-  if (raw === undefined || raw === null || String(raw).trim() === '') return def;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return def;
-  return Math.max(lo, Math.min(hi, n));
+const __ISP_MAX = { large: 42, rect: 24 };            // 按本组件版式算得
+
+const __ASN_URL = 'https://stat.ripe.net/data/as-overview/data.json?resource=AS';
+const __ASN_TTL = 30 * 24 * 3600000;                  // 按 ASN 缓存 30 天
+
+function __asnFromHolder(holder) {
+  let t = String(holder || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  const i = t.indexOf(' - ');
+  if (i >= 0) return t.slice(i + 3).trim();
+  const sp = t.indexOf(' ');
+  if (sp > 0) {
+    const head = t.slice(0, sp).replace(/-[A-Z0-9]+$/, '');
+    const rest = t.slice(sp + 1);
+    if (head && rest.toLowerCase().indexOf(head.toLowerCase()) >= 0) return rest;
+  }
+  return t;
+}
+
+async function __fetchAsnName(ctx, asn, policy) {
+  const num = String(asn === undefined || asn === null ? '' : asn).trim().replace(/^as\s*/i, '');
+  if (!/^\d+$/.test(num)) return undefined;
+  try {
+    const r = await ctx.http.get(__ASN_URL + num, { policy: policy, timeout: 4000 });
+    if (!r || r.status !== 200) return undefined;
+    const j = await r.json();
+    const holder = j && j.data && j.data.holder ? String(j.data.holder) : '';
+    return holder ? __asnFromHolder(holder) : '';
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function __ispText(asn, org, slot) {
+  const num = String(asn === undefined || asn === null ? '' : asn).trim().replace(/^as\s*/i, '');
+  const name = String(org || '').replace(/\s+/g, ' ').trim();
+  const t = num ? ('AS' + num + (name ? ' - ' + name : '')) : name;
+  if (!t) return null;
+  const max = __ISP_MAX[slot] || __ISP_MAX.large;
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const sp = cut.lastIndexOf(' ');
+  const head = sp > max * 0.6 ? cut.slice(0, sp) : cut;
+  return head.replace(/[\s,.;:(\-]+$/, '') + '…';
+}
+
+function __wantHideIp(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  return /^hide$/i.test(s) || s === '隐藏' || s === '脱敏';
+}
+
+function __maskIp(ip) {
+  const s = String(ip === undefined || ip === null ? '' : ip).trim();
+  if (!s) return '';
+  if (s.indexOf(':') >= 0) {
+    const g = s.split(':');
+    if (g.length < 3) return s;
+    return g[0] + ':****:' + g[g.length - 1];
+  }
+  const p = s.split('.');
+  if (p.length === 4) return p[0] + '.*.*.' + p[3];
+  return s;
 }
 
 async function __probeEgressIp(c, group, url) {
@@ -42,31 +90,7 @@ async function __probeEgressIp(c, group, url) {
   }
 }
 
-function __linkSignature(c) {
-  try {
-    const d = c.device || {};
-    const wifi = d.wifi || {};
-    const cell = d.cellular || {};
-    const ip4 = d.ipv4 || {};
-    return [
-      wifi.bssid || wifi.ssid || '',
-      cell.radio || cell.carrier || '',
-      ip4.interface || ''
-    ].join('|');
-  } catch (_) { return ''; }
-}
-
-function __ageText(ms) {
-  const min = Math.round(ms / 60000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return min + ' 分钟前';
-  const hr = Math.floor(min / 60);
-  return hr < 24 ? hr + ' 小时前' : Math.floor(hr / 24) + ' 天前';
-}
-
 async function __render(ctx) {
-
-  __nextRefreshAt = null;
 
   const strategyGroup =
     ctx.env.GROUP || 'DIRECT';
@@ -79,6 +103,7 @@ async function __render(ctx) {
 
   const ispSource = (ctx.env.SOURCE || '').toLowerCase();
 
+  const hideIp = __wantHideIp(ctx.env.IP);
 
   const C = {
     bgTop: '#0C0D0F',
@@ -92,12 +117,12 @@ async function __render(ctx) {
 
     blue: '#60A5FA',
 
-    risk0: '#22C55E',  // 0-15   优质
-    risk1: '#84CC16',  // 15-25  良好
-    risk2: '#EAB308',  // 25-40  普通
-    risk3: '#F59E0B',  // 40-50  低危
-    risk4: '#F97316',  // 50-70  中危
-    risk5: '#DC2626',  // 70-100 高危
+    risk0: '#22C55E',
+    risk1: '#84CC16',
+    risk2: '#EAB308',
+    risk3: '#F59E0B',
+    risk4: '#F97316',
+    risk5: '#DC2626',
 
     green: '#34D399',
     yellow: '#FACC15',
@@ -112,24 +137,9 @@ async function __render(ctx) {
 
   const bg = isGlass ? {} : { backgroundGradient: premiumGradient };
 
-  const probeMin   = __numEnv(ctx.env.PROBE, 0, 0, 720);
-  const rescoreMin = __numEnv(ctx.env.TTL, 720, 0, 10080);
-  const refreshMin = __numEnv(ctx.env.REFRESH, 30, 0, 1440);
-  const maxAgeMin  = __numEnv(ctx.env.MAX_AGE, 1440, 60, 10080);
-  const retryMin   = __numEnv(ctx.env.RETRY, 15, 1, 120);
-  const netAware   = ctx.env.NETWORK_AWARE === '1';
   const probeUrl   = ctx.env.PROBE_URL || 'https://cloudflare.com/cdn-cgi/trace';
-  const forceAlways = ctx.env.FORCE === '1';
-
-  const accessory     = /^accessory/.test(ctx.widgetFamily || '');
-  const effProbeMs    = (accessory ? Math.min(probeMin * 2, 720) : probeMin) * 60000;
-  const effRefreshMin = refreshMin;
 
   let data = null;
-  let attemptFailed = false;
-
-  const cacheKey = 'ippure_' + strategyGroup;
-  const linkSig  = __linkSignature(ctx);
 
   async function fetchScore() {
     const resp = await ctx.http.get(
@@ -140,19 +150,6 @@ async function __render(ctx) {
     const body = await resp.json();
     if (!body || typeof body !== 'object') throw new Error('bad body');
     return body;
-  }
-
-  function writeCache(d, keepTs, probeIp) {
-    try {
-      ctx.storage.setJSON(cacheKey, {
-        ...d,
-        ts: keepTs || Date.now(),
-        checkTs: Date.now(),
-        probeIp: probeIp || null,
-        ok: true,
-        sig: linkSig
-      });
-    } catch(_) {}
   }
 
   function lookupLocalASN(ip) {
@@ -172,91 +169,21 @@ async function __render(ctx) {
     return null;
   }
 
-  let cached = null;
-  try { cached = ctx.storage.getJSON(cacheKey); } catch(_) {}
+  const egressIp = await __probeEgressIp(ctx, strategyGroup, probeUrl);
 
-  const cacheAge    = cached && cached.ts ? Date.now() - cached.ts : Infinity;
-  const cacheUsable = !!cached && cacheAge <= maxAgeMin * 60000;
+  if (egressIp) {
+    try {
+      const body = await fetchScore();
+      const raw = body ? body.fraudScore : undefined;
+      const n = (typeof raw === 'number') ? raw
+              : (typeof raw === 'string' && raw.trim() !== '') ? Number(raw)
+              : NaN;
 
-  const sinceCheck = cached && cached.checkTs ? Date.now() - cached.checkTs : Infinity;
-  const due = forceAlways
-    || !cached
-    || sinceCheck >= effProbeMs
-    || (netAware && cached.sig !== linkSig);
-
-  if (!due) {
-
-    data = cached;
-
-  } else {
-
-    const egressIp = !forceAlways
-      ? await __probeEgressIp(ctx, strategyGroup, probeUrl)
-      : null;
-
-    const lastProbeIp = (cached && cached.probeIp) || null;
-    const baseMissing = !!cached && !lastProbeIp;
-    const ipChanged   = !!cached && !!egressIp && !!lastProbeIp
-                        && String(egressIp) !== String(lastProbeIp);
-    const rescoreDue  = rescoreMin > 0 && cacheAge > rescoreMin * 60000;
-
-    if (!cached || baseMissing || ipChanged || rescoreDue || egressIp === null) {
-
-      try {
-
-        const body = await fetchScore();
-
+      if (Number.isFinite(n)) {
+        body.fraudScore = Math.max(0, Math.min(100, n));
         data = body;
-
-        if (typeof data.fraudScore !== 'undefined') {
-          let s = Number(data.fraudScore);
-          if (!Number.isFinite(s)) s = 99;
-          data.fraudScore = Math.max(0, Math.min(100, s));
-        }
-
-        writeCache(data, Date.now(), egressIp);
-
-      } catch(e) {
-
-        attemptFailed = true;
-
-        if (cacheUsable) {
-          data = cached;
-        }
-
       }
-
-    } else {
-
-      data = cached;
-      writeCache(cached, cached.ts || Date.now(), egressIp);
-
-    }
-
-    if (!data) {
-      try {
-        const ipResp = await ctx.http.get(
-          'https://httpbin.org/ip',
-          { policy: strategyGroup, timeout: 5000 }
-        );
-        if (ipResp.status !== 200) throw new Error('HTTP ' + ipResp.status);
-        const ipBody = await ipResp.json();
-        const ip = ipBody.origin || '--';
-        const asn = $utils.ipasn(ip);
-        data = {
-          ip: ip,
-          asn: asn ? String(asn) : '---',
-          asOrganization: lookupLocalASN(ip) || 'IPASN',
-          country: '--',
-          region: '',
-          city: '',
-          fraudScore: 0,
-          isResidential: false,
-          isBroadcast: false
-        };
-      } catch(_) {}
-    }
-
+    } catch(e) {}
   }
 
   if (data && ispSource === 'local' && data.ip) {
@@ -264,36 +191,31 @@ async function __render(ctx) {
     if (org) data.asOrganization = org;
   }
 
-  let nextMs = attemptFailed ? retryMin * 60000 : effRefreshMin * 60000;
-  if (!attemptFailed && refreshMin <= 0) {
-    nextMs = 0;
-  } else {
-    if (!Number.isFinite(nextMs) || nextMs < 60000) nextMs = 60000;
-    nextMs = Math.min(nextMs, 1440 * 60000) * (0.95 + Math.random() * 0.1);
-    __nextRefreshAt = Date.now() + nextMs;
+  const asnKey = (n) => 'ippure_asn_' + String(n).trim().replace(/^as\s*/i, '');
+  const asnGet = (k) => { try { return ctx.storage.getJSON(k); } catch (_) { return null; } };
+  const asnSet = (k, v) => { try { ctx.storage.setJSON(k, v); } catch (_) {} };
+
+  let asnName = null;
+  if (data && data.asn !== undefined && data.asn !== null) {
+    const k = asnKey(data.asn);
+    const hit = asnGet(k);
+    if (hit && typeof hit === 'object' && (Date.now() - (hit.ts || 0)) < __ASN_TTL) {
+      asnName = hit.n || null;
+    } else {
+      const got = await __fetchAsnName(ctx, data.asn, strategyGroup);
+      if (got !== undefined) {
+        asnName = got || null;
+        asnSet(k, { n: got, ts: Date.now() });
+      }
+    }
   }
 
-
-  if (!data) {
-
-    data = {
-      ip: '请求失败',
-      asn: '---',
-      asOrganization: 'Network Error',
-      country: 'Unknown',
-      region: '',
-      city: '',
-      fraudScore: 99,
-      isResidential: false
-    };
-
-  }
-
+  const DASH = '--';
+  const gray = C.muted;
+  const metaDead = !data;
 
   const riskScore =
-    Number.isFinite(data.fraudScore)
-      ? Math.max(0, Math.min(100, data.fraudScore))
-      : 99;
+    metaDead ? 0 : Math.max(0, Math.min(100, data.fraudScore));
 
   let riskText = '高危';
   let riskColor = C.risk5;
@@ -315,6 +237,11 @@ async function __render(ctx) {
     riskColor = C.risk4;
   }
 
+  if (metaDead) {
+    riskText = DASH;
+    riskColor = gray;
+  }
+
   const riskIconMap = {
     risk0_house: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NCA0NCI+CiAgPHBhdGggZD0iTTEuNzksMjIuNjlBMi42NSwyLjY1LDAsMCwxLC41NCwyMi40YTEsMSwwLDAsMS0uNTQtMSwxLjgsMS44LDAsMCwxLC42NS0xLjMyTDE4Ljk0LDJBNy43NCw3Ljc0LDAsMCwxLDIwLjUxLjcyYTMsMywwLDAsMSwzLDBBNy43NCw3Ljc0LDAsMCwxLDI1LjA2LDJMNDMuMzUsMjAuMDhBMS44LDEuOCwwLDAsMSw0NCwyMS40YTEuMDYsMS4wNiwwLDAsMS0uNTMsMSwyLjY2LDIuNjYsMCwwLDEtMS4yNi4yOUgzOC4wNkwyMiw2Ljg1LDUuOTQsMjIuNjlabS43My0xLjYzSDUuMjVMMjIsNC41LDM4Ljc1LDIxLjA2aDIuNzNhLjE3LjE3LDAsMCwwLC4xOS0uMTQuMzQuMzQsMCwwLDAtLjEzLS4yOUwyMy45LDMuMTlhOCw4LDAsMCwwLTEuMTItMSwxLjM0LDEuMzQsMCwwLDAtMS41NiwwLDgsOCwwLDAsMC0xLjEyLDFMMi40NiwyMC42M2EuMzQuMzQsMCwwLDAtLjEzLjI5QS4xNy4xNywwLDAsMCwyLjUyLDIxLjA2Wk05LjgzLDQwLjQ0Yy0uNCwwLS43OSwwLTEuMTYsMGwtMS4wNywwQTguMiw4LjIsMCwwLDEsNC42OCw0MCwxLjI2LDEuMjYsMCwwLDEsNCwzOC43N2E0LjU1LDQuNTUsMCwwLDEsMS0zLjA2LDMsMywwLDAsMSwyLjQyLTEuMTUsMy4xOCwzLjE4LDAsMCwxLDEuMzIuMjRBMi43LDIuNywwLDAsMCw5LjgzLDM1LDIuNjMsMi42MywwLDAsMCwxMSwzNC44MWEzLjIxLDMuMjEsMCwwLDEsMS4zMS0uMjMsNS4xOSw1LjE5LDAsMCwxLDEuOS40LDYsNiwwLDAsMSwxLjY2LDEsMS40OCwxLjQ4LDAsMCwxLC42OSwxdjMuNDZabTUsMy4yM1Y0MC4zOGguMzJWMzguNUg0LjQ2VjIxLjc1bDEuNjYtMS4yN3YxNi40SDM3Ljg3VjIwLjQ4bDEuNjcsMS4yN1YzOC41SDI4LjgxdjEuODhoLjMydjMuMjlaTTYuODEsMTUuMjdWNi43N0g2LjE5VjIuNjNsNS4yMSwwVjYuNzdoLS42M3Y0LjM4Wk04LjU2LDI3LjM1VjI1YS44Mi44MiwwLDAsMSwuODEtLjgxaDIuMzJ2My4xMlptLjgxLDQuNTlhLjgyLjgyLDAsMCwxLS44MS0uODFWMjguODFoMy4xM3YzLjEzWm0zLjczLTQuNTlWMjQuMjNoMi4zMmEuODIuODIsMCwwLDEsLjgxLjgxdjIuMzFabTAsNC41OVYyOC44MWgzLjEzdjIuMzJhLjgyLjgyLDAsMCwxLS44MS44MVpNMTYuNTQsNDJIMjcuNDZWNDAuODVIMTYuNTRabS4zMS0yLjM5aDEwLjNWMzguNUgxNi44NVptMS4yNS0yLjM2VjI2YTMuMjYsMy4yNiwwLDAsMSwxLjE5LTIuNTMsNCw0LDAsMCwxLDUuNDMsMEEzLjI5LDMuMjksMCwwLDEsMjUuOSwyNlYzNy4yOVptNi4xMS02LjQ2YS43MS43MSwwLDAsMCwuNTMtLjIyLjczLjczLDAsMCwwLC4yMi0uNTMuNzcuNzcsMCwwLDAtLjIyLS41My43NS43NSwwLDAsMC0uNTMtLjIyLjc1Ljc1LDAsMCwwLS43NS43NS43NS43NSwwLDAsMCwuNzUuNzVabTMuMjUsOS42MVYzN2ExLjQ4LDEuNDgsMCwwLDEsLjY5LTEsNiw2LDAsMCwxLDEuNjctMSw1LjE4LDUuMTgsMCwwLDEsMS44OS0uNCwzLjIxLDMuMjEsMCwwLDEsMS4zMS4yMywyLjYzLDIuNjMsMCwwLDAsMS4xNS4yMywyLjcyLDIuNzIsMCwwLDAsMS4xNy0uMjQsMy4wOCwzLjA4LDAsMCwxLDEuMy0uMjQsMywzLDAsMCwxLDIuNDQsMS4xNSw0LjYsNC42LDAsMCwxLDEsMy4wNkExLjI1LDEuMjUsMCwwLDEsMzkuMzMsNDBhOC4yMiw4LjIyLDAsMCwxLTIuOTQuMzRsLTEuMDYsMGMtLjM3LDAtLjc2LDAtMS4xNiwwWm0uMzEtMTMuMDlWMjVhLjgyLjgyLDAsMCwxLC44MS0uODFIMzAuOXYzLjEyWm0uODEsNC41OWEuODIuODIsMCwwLDEtLjgxLS44MVYyOC44MUgzMC45djMuMTNabTMuNzMtNC41OVYyNC4yM2gyLjMyYS44Mi44MiwwLDAsMSwuODEuODF2Mi4zMVptMCw0LjU5VjI4LjgxaDMuMTN2Mi4zMmEuODIuODIsMCwwLDEtLjgxLjgxWiIgZmlsbD0iI2ZmZiIvPgo8L3N2Zz4K',
     risk1_sparkles: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NCA0NCI+CiAgPHBhdGggZD0iTTcuMzUsNDEuMDdsLS42LTNBMjAuODcsMjAuODcsMCwwLDAsNiwzNS4yMiwzLjcxLDMuNzEsMCwwLDAsNC45LDMzLjZhNS40LDUuNCwwLDAsMC0yLS45MUwwLDMxLjkyVjMwLjIxbDIuOS0uNzhhNS45Miw1LjkyLDAsMCwwLDItLjkzQTMuNzMsMy43MywwLDAsMCw2LDI2Ljg5LDE5LjkxLDE5LjkxLDAsMCwwLDYuNzUsMjRsLjYtM0g5LjJsLjU5LDNhMTguNjcsMTguNjcsMCwwLDAsLjc2LDIuODcsMy41OCwzLjU4LDAsMCwwLDEuMSwxLjYxLDUuODksNS44OSwwLDAsMCwyLC45M2wyLjg4Ljc4djEuNzFsLTIuODguNzdhNS4zOCw1LjM4LDAsMCwwLTIsLjkxLDMuNTYsMy41NiwwLDAsMC0xLjEsMS42MiwxOS41NCwxOS41NCwwLDAsMC0uNzYsMi45bC0uNTksM1pNOC4yMSwzOUEyNy40LDI3LjQsMCwwLDEsOSwzNS40NGE2LjQsNi40LDAsMCwxLDEuMDktMi4yNyw0LjQyLDQuNDIsMCwwLDEsMS44LTEuMzVBMTMuNDQsMTMuNDQsMCwwLDEsMTQuNzYsMzF2LjExYTE0LjA5LDE0LjA5LDAsMCwxLTIuOTEtLjgxQTQuNTgsNC41OCwwLDAsMSwxMC4wNSwyOSw2LjMyLDYuMzIsMCwwLDEsOSwyNi42OWEyNy4yLDI3LjIsMCwwLDEtLjc1LTMuNTVoLjExYTI5LjQsMjkuNCwwLDAsMS0uNzMsMy41NUE2LjQ5LDYuNDksMCwwLDEsNi41MSwyOSw0LjYyLDQuNjIsMCwwLDEsNC43LDMwLjNhMTQuMTYsMTQuMTYsMCwwLDEtMi45LjgxVjMxYTEzLjUsMTMuNSwwLDAsMSwyLjkuODIsNC40NSw0LjQ1LDAsMCwxLDEuODEsMS4zNSw2LjU3LDYuNTcsMCwwLDEsMS4wOCwyLjI3QTI5LjYxLDI5LjYxLDAsMCwxLDguMzIsMzlabTIuMTEtMjAuNDUtLjQ0LTIuMzJhOS41LDkuNSwwLDAsMC0uNjktMi4zN0EyLjY2LDIuNjYsMCwwLDAsOCwxMi42MmE5LjI1LDkuMjUsMCwwLDAtMi4yMy0uNzJsLTEuNDMtLjMxVjkuOWwxLjQzLS4zM0E5LjYsOS42LDAsMCwwLDgsOC44MywyLjY4LDIuNjgsMCwwLDAsOS4xOSw3LjZhOS4yMSw5LjIxLDAsMCwwLC42OS0yLjM0bC40NC0yLjMzaDEuNzZsLjQ2LDIuMzNhMTAuNTYsMTAuNTYsMCwwLDAsLjcsMi4zNEEyLjU1LDIuNTUsMCwwLDAsMTQuNCw4LjgyYTEwLDEwLDAsMCwwLDIuMjMuNzVMMTgsOS45djEuNjlsLTEuNDEuMzFhOC43OCw4Ljc4LDAsMCwwLTIuMjMuNzMsMi42MywyLjYzLDAsMCwwLTEuMTYsMS4yNCwxMC42MSwxMC42MSwwLDAsMC0uNywyLjM2bC0uNDYsMi4zMlptLjgxLTEuODNhMTkuNTIsMTkuNTIsMCwwLDEsLjY0LTIuOCw0LjQ0LDQuNDQsMCwwLDEsLjktMS42NSwzLjgsMy44LDAsMCwxLDEuNDUtLjk0LDE0LjY4LDE0LjY4LDAsMCwxLDIuMjktLjY0di4xMWExOC43NywxOC43NywwLDAsMS0yLjI5LS42NSwzLjYsMy42LDAsMCwxLTEuNDUtMSw0LjQxLDQuNDEsMCwwLDEtLjktMS42NiwxOSwxOSwwLDAsMS0uNjQtMi43OWguMTVhMTguODYsMTguODYsMCwwLDEtLjY1LDIuNzlBNC41NSw0LjU1LDAsMCwxLDkuNzQsOS4yYTMuNTYsMy41NiwwLDAsMS0xLjQ0LDFBMTguMjYsMTguMjYsMCwwLDEsNiwxMC44di0uMTFhMTQuMzcsMTQuMzcsMCwwLDEsMi4yOS42NCwzLjc2LDMuNzYsMCwwLDEsMS40NC45NCw0LjU4LDQuNTgsMCwwLDEsLjg5LDEuNjUsMTkuMzUsMTkuMzUsMCwwLDEsLjY1LDIuOFpNMjcuNTcsNDEuMDdsLS43My01Yy0uMjktMi0uNi0zLjYzLS45My01YTEyLjQsMTIuNCwwLDAsMC0xLjIxLTMuMjcsNi4xMSw2LjExLDAsMCwwLTEuODUtMi4wNSwxMCwxMCwwLDAsMC0yLjgtMS4yOWMtMS4xMi0uMzUtMi40OS0uNjgtNC4xLTFsLTMtLjYzdi0xLjdsMy0uNjJjMS42MS0uMzMsMy0uNjcsNC4xLTFhMTAuMjYsMTAuMjYsMCwwLDAsMi44LTEuMyw2LjE3LDYuMTcsMCwwLDAsMS44NS0yLDEyLjE5LDEyLjE5LDAsMCwwLDEuMjEtMy4yNmMuMzMtMS4zNC42NC0zLC45My01bC43My01aDEuOGwuNzEsNWMuMjksMiwuNTksMy42My45MSw1YTEyLjc1LDEyLjc1LDAsMCwwLDEuMjIsMy4yNyw2LjI0LDYuMjQsMCwwLDAsMS44NiwyLjA1LDEwLDEwLDAsMCwwLDIuODEsMS4yOWMxLjEyLjMzLDIuNDguNjcsNC4xLDFsMywuNjJ2MS43bC0zLC42M2MtMS42Mi4zMy0zLC42Ni00LjEsMWExMCwxMCwwLDAsMC0yLjgxLDEuMjksNi4yNCw2LjI0LDAsMCwwLTEuODYsMi4wNUExMi43NSwxMi43NSwwLDAsMCwzMSwzMS4wOWMtLjMyLDEuMzQtLjYyLDMtLjkxLDVsLS43MSw1Wm0uODMtMy41MnEuNDItMy4xMi44NS01LjM2YTIzLjUsMjMuNSwwLDAsMSwxLTMuNzgsOC41Miw4LjUyLDAsMCwxLDEuNDUtMi41Nyw3LjI5LDcuMjksMCwwLDEsMi4xMi0xLjdBMTYuMywxNi4zLDAsMCwxLDM2LjksMjNjMS4xOS0uMzQsMi42LS42OCw0LjI0LTF2LjE0Yy0xLjY0LS4zNS0zLS43LTQuMjQtMWExNS42NiwxNS42NiwwLDAsMS0zLjA2LTEuMTgsNy4yOSw3LjI5LDAsMCwxLTIuMTItMS43LDguNTIsOC41MiwwLDAsMS0xLjQ1LTIuNTcsMjMuNSwyMy41LDAsMCwxLTEtMy43OHEtLjQzLTIuMjQtLjg1LTUuMzZoLjEzcS0uNDIsMy4xMi0uODYsNS4zNmEyMi41OCwyMi41OCwwLDAsMS0xLDMuNzgsOC43Myw4LjczLDAsMCwxLTEuNDUsMi41Nyw3LjQyLDcuNDIsMCwwLDEtMi4xMiwxLjcsMTUuNDQsMTUuNDQsMCwwLDEtMywxLjE4Yy0xLjE5LjMzLTIuNjEuNjgtNC4yNSwxdi0uMTRjMS42NC4zNCwzLjA2LjY4LDQuMjUsMWExNC44MywxNC44MywwLDAsMSwzLDEuMTksNy4yMyw3LjIzLDAsMCwxLDIuMTIsMS42OSw4Ljg2LDguODYsMCwwLDEsMS40NSwyLjU3LDIyLjU4LDIyLjU4LDAsMCwxLDEsMy43OHEuNDMsMi4yNS44Niw1LjM4WiIgZmlsbD0iI2ZmZiIvPgo8L3N2Zz4K',
@@ -331,32 +258,47 @@ async function __render(ctx) {
   else if (riskScore <= 50) riskIcon = riskIconMap.risk3_thinking;
   else if (riskScore <= 70) riskIcon = riskIconMap.risk4_warning;
 
+  if (metaDead) riskIcon = 'sf-symbol:questionmark';
+
   const networkText =
-    data.isResidential === true
-      ? '住宅原生'
-      : '机房网络';
+    metaDead
+      ? DASH
+      : (data.isResidential === true ? '住宅原生' : '机房网络');
 
   const networkColor =
-    data.isResidential === true
-      ? C.green
-      : C.yellow;
-
+    metaDead
+      ? gray
+      : (data.isResidential === true ? C.green : C.yellow);
 
   const locationText = [
-    data.country,
-    data.region,
-    data.city
+    data && data.country,
+    data && data.region,
+    data && data.city
   ]
   .filter(Boolean)
   .join(' · ');
 
   const shortLocation = [
-    data.country,
-    data.city
+    data && data.country,
+    data && data.city
   ]
   .filter(Boolean)
   .join(' · ');
 
+  const shownIp   = data ? (hideIp ? __maskIp(data.ip) : data.ip) : null;
+  const tIp       = metaDead ? DASH : (shownIp || DASH);
+  const tIpSmall  = metaDead ? DASH : (data.ip && data.ip.includes(':') ? 'IPV6 NETWORK' : (shownIp || DASH));
+  const tCountry  = metaDead ? DASH : (data.country || DASH);
+  const ispFor    = (slot) => metaDead ? DASH : (__ispText(data.asn, asnName || data.asOrganization, slot) || DASH);
+  const tBcast    = metaDead ? DASH : (data.isBroadcast === true ? '是' : '否');
+  const tLoc      = metaDead ? DASH : (locationText || DASH);
+  const tLocShort = metaDead ? DASH : (shortLocation || DASH);
+  const tScore    = metaDead ? DASH : String(riskScore);
+  const cScore    = metaDead ? gray : riskColor;
+  const tRect     = metaDead ? DASH
+    : ((data.countryCode || data.country || DASH) + (data.city ? ' · ' + data.city : ''));
+  const tInline   = metaDead ? DASH
+    : ((data.countryCode || data.country || DASH) + ' · ' + networkText);
 
   function row(label, value, valueColor) {
 
@@ -430,12 +372,16 @@ async function __render(ctx) {
 
   if (widgetFamily === 'accessoryCircular') {
 
-    return {
+    const node = {
       type: 'image',
       src: riskIcon,
       width: 40,
       height: 40
     };
+
+    if (metaDead) node.color = gray;
+
+    return node;
 
   }
 
@@ -451,24 +397,24 @@ async function __render(ctx) {
 
         {
           type: 'text',
-          text: (data.countryCode || data.country || '--') + (data.city ? ' · ' + data.city : ''),
+          text: tRect,
           font: {
             size: 14,
             weight: 'semibold'
           },
-          textColor: C.text,
+          textColor: metaDead ? gray : C.text,
           maxLines: 1,
           minScale: 0.75
         },
 
         {
           type: 'text',
-          text: data.asOrganization || 'Unknown',
+          text: ispFor('rect'),
           font: {
             size: 11,
             weight: 'medium'
           },
-          textColor: C.secondary,
+          textColor: metaDead ? gray : C.secondary,
           maxLines: 1,
           minScale: 0.7
         },
@@ -500,12 +446,12 @@ async function __render(ctx) {
 
         {
           type: 'text',
-          text: (data.countryCode || data.country || '--') + ' · ' + networkText,
+          text: tInline,
           font: {
             size: 14,
             weight: 'semibold'
           },
-          textColor: C.text,
+          textColor: metaDead ? gray : C.text,
           maxLines: 1,
           minScale: 0.7
         }
@@ -577,12 +523,12 @@ async function __render(ctx) {
 
             {
               type: 'text',
-              text: data.ip && data.ip.includes(':') ? 'IPV6 NETWORK' : (data.ip || 'N/A'),
+              text: tIpSmall,
               font: {
                 size: 20,
                 weight: 'heavy'
               },
-              textColor: C.text,
+              textColor: metaDead ? gray : C.text,
               minScale: 0.7,
               maxLines: 1
             },
@@ -594,7 +540,7 @@ async function __render(ctx) {
 
             {
               type: 'text',
-              text: data.country || 'Unknown',
+              text: tCountry,
               font: {
                 size: 'caption1',
                 weight: 'bold'
@@ -646,12 +592,12 @@ async function __render(ctx) {
 
             {
               type: 'text',
-              text: String(riskScore),
+              text: tScore,
               font: {
                 size: 34,
                 weight: 'bold'
               },
-              textColor: riskColor
+              textColor: cScore
             }
 
           ]
@@ -729,12 +675,12 @@ async function __render(ctx) {
 
         {
           type: 'text',
-          text: data.ip || 'N/A',
+          text: tIp,
           font: {
             size: 24,
             weight: 'bold'
           },
-          textColor: C.text,
+          textColor: metaDead ? gray : C.text,
           maxLines: 1,
           minScale: 0.65
         },
@@ -763,11 +709,11 @@ async function __render(ctx) {
 
             {
               type: 'text',
-              text: shortLocation || 'Unknown',
+              text: tLocShort,
               font: {
                 size: 'subheadline'
               },
-              textColor: C.secondary,
+              textColor: metaDead ? gray : C.secondary,
               maxLines: 1,
               minScale: 0.75
             },
@@ -778,12 +724,12 @@ async function __render(ctx) {
 
             {
               type: 'text',
-              text: String(riskScore),
+              text: tScore,
               font: {
                 size: 'title3',
                 weight: 'bold'
               },
-              textColor: riskColor
+              textColor: cScore
             }
 
           ]
@@ -871,12 +817,12 @@ async function __render(ctx) {
 
         {
           type: 'text',
-          text: data.ip || 'N/A',
+          text: tIp,
           font: {
             size: 36,
             weight: 'bold'
           },
-          textColor: C.text,
+          textColor: metaDead ? gray : C.text,
           maxLines: 1,
           minScale: 0.65
         },
@@ -896,28 +842,26 @@ async function __render(ctx) {
 
         row(
           '位置',
-          locationText || 'Unknown'
+          tLoc,
+          metaDead ? gray : C.secondary
         ),
 
         row(
           '运营商',
-          data.asOrganization || 'Unknown'
-        ),
-
-        row(
-          'ASN',
-          String(data.asn || '---')
+          ispFor('large'),
+          metaDead ? gray : C.secondary
         ),
 
         row(
           '广播IP',
-          data.isBroadcast === true ? '是' : '否'
+          tBcast,
+          metaDead ? gray : C.secondary
         ),
 
         row(
           '风险系数',
-          String(riskScore),
-          riskColor
+          tScore,
+          cScore
         ),
 
         {
@@ -935,14 +879,14 @@ async function __render(ctx) {
               src: 'sf-symbol:checkmark.circle.fill',
               width: 12,
               height: 12,
-              color: C.green
+              color: metaDead ? gray : C.green
             },
 
             {
               type: 'text',
-              text: 'Connection Active',
+              text: metaDead ? DASH : 'Connection Active',
               font: { size: 'caption2' },
-              textColor: C.secondary
+              textColor: metaDead ? gray : C.secondary
             }
 
           ]
@@ -1028,12 +972,12 @@ async function __render(ctx) {
 
       {
         type: 'text',
-        text: data.ip || 'N/A',
+        text: tIp,
         font: {
           size: 32,
           weight: 'bold'
         },
-        textColor: C.text,
+        textColor: metaDead ? gray : C.text,
         maxLines: 1,
         minScale: 0.65
       },
@@ -1053,17 +997,20 @@ async function __render(ctx) {
 
       row(
         '位置',
-        locationText || 'Unknown'
+        tLoc,
+        metaDead ? gray : C.secondary
       ),
 
       row(
         '运营商',
-        data.asOrganization || 'Unknown'
+        ispFor('large'),
+        metaDead ? gray : C.secondary
       ),
 
       row(
         '广播IP',
-        data.isBroadcast === true ? '是' : '否'
+        tBcast,
+        metaDead ? gray : C.secondary
       ),
 
       {
@@ -1085,12 +1032,12 @@ async function __render(ctx) {
 
           {
             type: 'text',
-            text: String(riskScore),
+            text: tScore,
             font: {
               size: 'caption1',
               weight: 'bold'
             },
-            textColor: riskColor,
+            textColor: cScore,
             textAlign: 'right'
           }
 
@@ -1112,14 +1059,14 @@ async function __render(ctx) {
             src: 'sf-symbol:checkmark.circle.fill',
             width: 12,
             height: 12,
-            color: C.green
+            color: metaDead ? gray : C.green
           },
 
           {
             type: 'text',
-            text: 'Connection Active',
+            text: metaDead ? DASH : 'Connection Active',
             font: { size: 'caption2' },
-            textColor: C.secondary
+            textColor: metaDead ? gray : C.secondary
           }
 
         ]
@@ -1133,11 +1080,7 @@ async function __render(ctx) {
 
 export default async function(ctx) {
 
-  let widget = await __render(ctx);
-
-  if (widget && __nextRefreshAt) {
-    widget.refreshAfter = new Date(__nextRefreshAt).toISOString();
-  }
+  const widget = await __render(ctx);
 
   return widget;
 
