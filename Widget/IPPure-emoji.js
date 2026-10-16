@@ -57,6 +57,15 @@ function __ispText(asn, org, slot) {
   return head.replace(/[\s,.;:(\-]+$/, '') + '…';
 }
 
+// 这份响应有没有用：有对象且 ip 像个地址就算有用，**不要求有分数**。
+// 原因：ippure 对 **IPv6 客户端**的响应里没有 fraudScore / isResidential / isBroadcast
+// （HTTP 仍是 200），但 ip / asn / 国家 / 城市 都在 —— 那部分照样可以显示。
+function __usableMeta(body) {
+  if (!body || typeof body !== 'object') return false;
+  const ip = body.ip;
+  return typeof ip === 'string' && /[.:]/.test(ip) && ip.trim().length >= 3;
+}
+
 function __wantHideIp(v) {
   const s = String(v === undefined || v === null ? '' : v).trim();
   return /^hide$/i.test(s) || s === '隐藏' || s === '脱敏';
@@ -176,13 +185,15 @@ async function __render(ctx) {
   if (egressIp) {
     try {
       const body = await fetchScore();
-      const raw = body ? body.fraudScore : undefined;
-      const n = (typeof raw === 'number') ? raw
-              : (typeof raw === 'string' && raw.trim() !== '') ? Number(raw)
-              : NaN;
+      if (__usableMeta(body)) {
+        const raw = body.fraudScore;
+        const n = (typeof raw === 'number') ? raw
+                : (typeof raw === 'string' && raw.trim() !== '') ? Number(raw)
+                : NaN;
 
-      if (Number.isFinite(n)) {
-        body.fraudScore = Math.max(0, Math.min(100, n));
+        // 分数拿不到就存 null（不许退化成 0：那会显示成绿色的「优质 0」）。
+        // 元信息仍然保留 ⇒ 后面只灰缺的那几格。
+        body.fraudScore = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
         data = body;
       }
     } catch(e) {}
@@ -216,8 +227,14 @@ async function __render(ctx) {
   const gray = C.muted;
   const metaDead = !data;
 
-  const riskScore =
-    metaDead ? 0 : Math.max(0, Math.min(100, data.fraudScore));
+  // 分数 / 住宅判定 / 广播判定**各自单独判**：ippure 对 IPv6 客户端不给这三个字段，
+  // 那是「只有这几格没数」，不是「整份响应没用」⇒ 缺哪个灰哪个（而不是整块变 `--`）。
+  const riskScore = (data && Number.isFinite(data.fraudScore)) ? data.fraudScore : null;
+  const scoreDead = metaDead || riskScore === null;
+  const resKnown = !!(data && typeof data.isResidential === 'boolean');
+  const bcastKnown = !!(data && typeof data.isBroadcast === 'boolean');
+  const netDead = metaDead || !resKnown;
+  const bcastDead = metaDead || !bcastKnown;
 
   let riskText = '高危';
   let riskColor = C.risk5;
@@ -239,7 +256,8 @@ async function __render(ctx) {
     riskColor = C.risk4;
   }
 
-  if (metaDead) {
+  // 分数没了 ⇒ 标签与图标都不给结论（`--` + 中性问号），而不是落回默认的「高危」+ 便便图标
+  if (scoreDead) {
     riskText = DASH;
     riskColor = gray;
   }
@@ -260,15 +278,15 @@ async function __render(ctx) {
   else if (riskScore <= 50) riskIcon = riskIconMap.risk3_thinking;
   else if (riskScore <= 70) riskIcon = riskIconMap.risk4_warning;
 
-  if (metaDead) riskIcon = 'sf-symbol:questionmark';
+  if (scoreDead) riskIcon = 'sf-symbol:questionmark';
 
   const networkText =
-    metaDead
+    netDead
       ? DASH
       : (data.isResidential === true ? '住宅原生' : '机房网络');
 
   const networkColor =
-    metaDead
+    netDead
       ? gray
       : (data.isResidential === true ? C.green : C.yellow);
 
@@ -292,15 +310,16 @@ async function __render(ctx) {
   const tIpSmall  = metaDead ? DASH : (data.ip && data.ip.includes(':') ? 'IPV6 NETWORK' : (shownIp || DASH));
   const tCountry  = metaDead ? DASH : (data.country || DASH);
   const ispFor    = (slot) => metaDead ? DASH : (__ispText(data.asn, asnName || data.asOrganization, slot) || DASH);
-  const tBcast    = metaDead ? DASH : (data.isBroadcast === true ? '是' : '否');
+  const tBcast    = bcastDead ? DASH : (data.isBroadcast === true ? '是' : '否');
   const tLoc      = metaDead ? DASH : (locationText || DASH);
   const tLocShort = metaDead ? DASH : (shortLocation || DASH);
-  const tScore    = metaDead ? DASH : String(riskScore);
-  const cScore    = metaDead ? gray : riskColor;
+  const tScore    = scoreDead ? DASH : String(riskScore);
+  const cScore    = scoreDead ? gray : riskColor;
   const tRect     = metaDead ? DASH
     : ((data.countryCode || data.country || DASH) + (data.city ? ' · ' + data.city : ''));
+  // 住宅判定拿不到时不拼 `--` 进去（`US · --` 很吵）
   const tInline   = metaDead ? DASH
-    : ((data.countryCode || data.country || DASH) + ' · ' + networkText);
+    : ((data.countryCode || data.country || DASH) + (netDead ? '' : ' · ' + networkText));
 
   function row(label, value, valueColor) {
 
@@ -330,7 +349,7 @@ async function __render(ctx) {
             size: 'caption1',
             weight: 'medium'
           },
-          textColor: valueColor || C.secondary,
+          textColor: valueColor || (value === DASH ? gray : C.secondary),
           textAlign: 'right',
           maxLines: 1,
           minScale: 0.75
@@ -381,7 +400,7 @@ async function __render(ctx) {
       height: 40
     };
 
-    if (metaDead) node.color = gray;
+    if (scoreDead) node.color = gray;   // 圆环这一档里，图标就是分数 ⇒ 没分数时连颜色一起中性化
 
     return node;
 
@@ -857,7 +876,7 @@ async function __render(ctx) {
         row(
           '广播IP',
           tBcast,
-          metaDead ? gray : C.secondary
+          bcastDead ? gray : C.secondary
         ),
 
         row(
@@ -1012,7 +1031,7 @@ async function __render(ctx) {
       row(
         '广播IP',
         tBcast,
-        metaDead ? gray : C.secondary
+        bcastDead ? gray : C.secondary
       ),
 
       {
