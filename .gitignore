@@ -1,0 +1,7 @@
+*
+!.gitignore
+!Widget
+!Skill
+!Skill/**
+!README.md
+!LICENSE
