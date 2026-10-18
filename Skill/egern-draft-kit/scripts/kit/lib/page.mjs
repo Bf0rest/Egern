@@ -2,7 +2,7 @@
 //
 // 用法（壳里唯一要改的一句）：
 //   import { writePage } from './lib/page.mjs';
-//   writePage(out, html);            // ← 原来是 writeFileSync(out, html)
+//   writePage(out, html);
 //
 // 为什么放在这里：读数浮层必须存在于**页面**里，而 渲染层 只产出片段、看不到文档；
 // 写盘是每份稿都必经的一步，所以由它兜底 —— 新稿照模板复制也漏不了。
