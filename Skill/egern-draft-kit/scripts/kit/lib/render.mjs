@@ -1,6 +1,6 @@
 // Egern widget DSL → HTML 近似渲染（供 build/ 下的稿页脚本使用）。
 //
-// 分层（2026-10-18 拆分，之前全在一个 `scripts/kit/渲染层` 里）：
+// 分层：
 //   · `nodes.mjs`    —— 平台事实与默认值（唯一来源，每条带官方出处）
 //   · `symbols.mjs`  —— SF Symbol 近似形状
 //   · `annotate.mjs` —— 读数标注 data-eg*（可 EG_ANNOTATE=off 关掉）
