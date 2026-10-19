@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 0.3.0 — 2026-10-19
+
+- **references 全部改成英文文件名**（不同 agent 对中文文件名的处理不一致）：
+  `官方事实索引.md` → `official-facts.md`、`支持矩阵.md` → `support-matrix.md`、`稿子纪律.md` → `draft-discipline.md`；
+  `陌生脚本-checklist.md` **删除**。
+- **不再把「直接读脚本」当能力宣传**：`draft` 会真跑脚本，而数据拿不到时走降级分支 —— 元素比真机少、
+  形状不作数。SKILL.md 换成「它改不了『别人的脚本』（先看这条）」一节（缺的是**上下文**，不只是数据），
+  并写明它不是「打开成品看长相」的工具。
+- **用语统一**：不再区分「陌生脚本 / 第三方脚本」，统称**脚本**；「平台」一律写成 **Egern**。
+- `references/` 里的固定顺序清单随上面那条一并去掉（`inspect` 的静态体检仍在，但不跑代码）。
+- **差异对账表按现渲染器重核**：12 行里 10 行已对齐（默认 row / 系统主色 / contain / `borderRadius:auto` /
+  `backgroundImage` / `shadow*` / `date` / 自适应色 / 渐变 stops / 字号键名），只剩 2 行**仍有差异**
+  （`minScale` 稿页不缩；`width`/`height` 对 `text` 也生效），并写清照稿改版式时的影响。
+- `selfcheck.mjs` 把这张表能断言的部分都断言上（`borderRadius:auto`、`shadow*`、非官方字号键、以及
+  「`shadowRadius` 没写不画阴影」），两条仍与真机不同的行为改成 `WARN` 标注 —— 表与自检不再各说各话。
+
 ## 0.2.0 — 2026-10-19
 
 - **包名 `egern-draft-kit` → `egern-widget-kit`**：名字直接对上 Egern widget，一眼能看出是给谁用的。

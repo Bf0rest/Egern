@@ -1,31 +1,5 @@
-// 稿页读数浮层 —— 给"交流用"的那一层：
-//   鼠标划过组件里的元素 → 浮标（页面级固定层，**不会被组件的 overflow:hidden 裁掉**）
-//   点一下 → 钉住；再划过别的元素 → 左下角读数条给差值
-//   Esc 或点空白 → 清除
-//
-// 两处分工：
-//   · 元素上的浮标：只给 **名字 · 左边(x) · 尺寸**（信息少，不挡视线、不会被裁）
-//   · 左下角读数条：给全量 —— x/y、w×h、层级路径、以及与钉住元素的 Δ左/Δ上/Δ右/Δ下/Δ中X/Δ中Y
-//
-// 坐标口径（**全部按边缘，不按中心**）：
-//   原点 = 组件（.widget）的**外框左上角**；x = 元素**左边缘**到它的距离；y = **上边缘**到它的距离；
-//   w×h = 元素外框尺寸（含 padding / border，即 getBoundingClientRect 的语义）。
-//   所以「Δ上 +2.6」= 这个元素的上边缘比钉住那个低 2.6pt；「Δ下」比的是下边缘；
-//   要看"中心对齐了吗"就读读数条里的 Δ中Y / Δ中X（中心之差）。
-//
-// 为什么用 JS：尺寸只有浏览器量得到（`hug_contents` / `flex:1` 的节点没有声明值）；
-// 面板 file 标签**会执行内联脚本**（2026-10-18 实测 `document.title` 被改），这条路可用。
-// 纯 CSS 兜底版本（拿不到真实尺寸）：`[data-eg]:hover{outline:1px dashed}`
-//   + `[data-eg]:hover::after{content:attr(data-eg-label)}`。
-//
-// ⚠️ 读数单位 px = pt（稿页 1:1 真机画布），但这是**近似稿像素** ——
-//   按 `references/稿子纪律.md` 不作证据，只用来把"左一点右一点"说成一个数。
-//
-// 接入：壳里一行 `<script>${overlayJs()}</script>`（放在 </body> 前）。
-// 标注属性由 渲染层 的 egAttrs() 打在元素上（data-eg / -label / -path / -decl）。
-
 const CSS = [
-  '.widget{position:relative}',                       // 虚线框那一层的定位基准（必须）
+  '.widget{position:relative}',
   '.eg-layer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:9}',
   '.eg-box{position:absolute;box-sizing:border-box;border:1px dashed #60A5FA;background:rgba(96,165,250,.07)}',
   '.eg-box.pin{border-style:solid;border-color:#F59E0B;background:rgba(245,158,11,.08)}',
@@ -124,12 +98,10 @@ const LINES = [
   '})();'
 ];
 
-/** 返回要内联进稿页的 `<script>` 内容（接入时写在 </body> 前） */
 export function overlayJs() {
   return LINES.join('\n');
 }
 
-/** 只想要样式（少数场景：自己做浮层时复用同一套 class） */
 export function overlayCss() {
   return CSS;
 }

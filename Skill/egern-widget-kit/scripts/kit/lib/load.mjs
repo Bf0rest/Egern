@@ -1,23 +1,7 @@
-// 第三方脚本「接入」层 —— 通用，零配置。
-//
-// 职责：给一个 URL 或本地路径，把源码读进来、规范化成 ESM、动态 import，交回 `export default` 函数。
-// 为什么要这一层：Egern 的脚本文件扩展名是 `.js` 但内容是 ESM，Node 按扩展名判 CommonJS
-// ⇒ 直接用路径 import 会报 `Cannot use import statement outside a module`；必须复制成 `.mjs` 再 import。
-//
-// ⚠️ 降级阶梯（照 `references/` 的纪律：**跑不起来就只报事实，不许编一张稿**）：
-//   ① 能 import → 交回函数，正常出稿
-//   ② import 抛错 → 抛 IMPORT_FAILED（带原始错误与规范化后的文件路径，便于定位行号）
-//   ③ 没有 `export default` 或是别的类型 → 抛 NOT_A_SCRIPT
-//
-// 用法：
-//   const { fn, code, from } = await load('https://example.com/widget.js');
-//   const tree = await fn(fakeCtx);
-
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-/** 读源码：URL 走 fetch，其余当本地路径 */
 export async function readSource(src) {
   if (/^https?:\/\//i.test(src)) {
     const r = await fetch(src, { redirect: 'follow' });
@@ -27,7 +11,6 @@ export async function readSource(src) {
   return { code: readFileSync(src, 'utf8'), from: path.resolve(src) };
 }
 
-/** 取出 `export default async function(ctx)`（或 `export default async (ctx) => …`） */
 export async function load(src, { tmpDir } = {}) {
   const { code, from } = await readSource(src);
   const dir = tmpDir || path.join(os.tmpdir(), 'egern-widget-kit');
@@ -51,8 +34,6 @@ export async function load(src, { tmpDir } = {}) {
   return { fn: mod.default, code, from, esmFile: file, module: mod };
 }
 
-/** 官方 ctx 面：模拟层做到什么程度。报告里必须如实打出来 ——
- *  「脚本走了失败分支」和「模拟层缺东西」是两件事，别让读者混淆。 */
 export const SIM = {
   real: ['env', 'widgetFamily', 'storage', 'http.get/post/put/delete/head/options/patch'],
   stubbed: ['device（字段全 null）', 'app（空串）', 'script（空名）',
@@ -62,11 +43,9 @@ export const SIM = {
 export const simLine = () =>
   `已实现 ${SIM.real.join(' / ')}；空壳 ${SIM.stubbed.join(' / ')}；未实现 ${SIM.missing.join(' / ')}`;
 
-/** 通用模拟 ctx：**只用于把树跑出来看看**。所有请求返回"空占位响应"，绝不编造业务数据。
- *  `mock`（一个 JSON 对象）= 所有 http 方法都返回它（--mock 的落地实现，别在 CLI 里猴补丁）。 */
 export function genericCtx({ family = 'systemMedium', env = {}, storage = {}, mock = null } = {}) {
-  const calls = [];                        // 它请求过哪些 URL（带方法，按顺序）
-  const notes = [];                        // 它想发的通知（不真发）
+  const calls = [];
+  const notes = [];
   const store = { ...storage };
   const response = (url) => ({
     status: 200, url,
@@ -86,7 +65,7 @@ export function genericCtx({ family = 'systemMedium', env = {}, storage = {}, mo
       new Error(`模拟 ctx 没有实现 ctx.${what}（不是脚本的错；这条分支要上真机验证）`),
       { code: 'SIM_UNIMPLEMENTED' });
   };
-  const same = async (a) => a;             // 恒等占位：原样返回，不做真压缩/真摘要
+  const same = async (a) => a;
   return {
     calls, notes,
     ctx: {

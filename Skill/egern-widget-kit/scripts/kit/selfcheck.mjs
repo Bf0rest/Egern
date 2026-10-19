@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// 一键自检：确认这套工具本身没坏（渲染分支 / 基座 / 接入 / 出稿）。
-// 用法：node scripts/kit/selfcheck.mjs        全部通过时 exit 0
 import { render, takeIssues } from './lib/render.mjs';
 import { check as baselineCheck } from './lib/baseline.mjs';
 import { load, genericCtx } from './lib/load.mjs';
@@ -11,17 +9,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const kitRoot = fileURLToPath(new URL('../..', import.meta.url));   // kit 根（scripts/kit → ../../）
+const kitRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 let bad = 0, warn = 0;
 const ok = (name, cond, detail) => {
   if (!cond) bad++;
   console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? '  → ' + detail : ''}`);
 };
-// 已知偏差（台账里"实测 vs 官方"的差）不是失败 —— 它按设计只作校验，不参与排版
 const note = (name, detail) => { warn++; console.log(`  WARN  ${name}  → ${detail}`); };
 
-// ── ① 渲染分支：每条官方默认值都要能被断言到 ─────────────────────────────
 console.log('① 渲染分支（官方默认值）');
 const one = (tree) => { const h = render(tree, 'w-md'); takeIssues(); return h; };
 
@@ -37,15 +33,19 @@ ok('根下含裸 spacer 的行补 align-self:stretch',
 ok('渐变 stops 生效', /%/.test(one({ type: 'widget', backgroundGradient: { type: 'linear', colors: ['#000000', '#FFFFFF'], stops: [0, 1] }, children: [] })));
 ok('backgroundImage 优先于渐变', /background-image:url\(/.test(one({ type: 'widget', backgroundImage: 'data:image/svg+xml,<svg/>', backgroundGradient: { colors: ['#000000', '#FFFFFF'] }, children: [] })));
 ok('自适应色按一侧落色', /color:#FFFFFF/.test(one({ type: 'widget', children: [{ type: 'text', text: 'x', textColor: { light: '#000000', dark: '#FFFFFF' } }] })));
+ok('borderRadius:"auto" ⇒ inherit', /border-radius:inherit/.test(one({ type: 'widget', children: [{ type: 'stack', borderRadius: 'auto', children: [] }] })));
+ok('shadow* ⇒ box-shadow', /box-shadow:1px 2px 4px #000000/.test(one({ type: 'widget', children: [{ type: 'stack', shadowRadius: 4, shadowOffset: { x: 1, y: 2 }, shadowColor: '#000000', children: [] }] })));
+ok('shadowRadius 省略 ⇒ 不画阴影', !/box-shadow/.test(one({ type: 'widget', children: [{ type: 'stack', shadowColor: '#000000', children: [] }] })));
+ok('非官方字号键 ⇒ 落 body 默认', /font-size:17px/.test(one({ type: 'widget', children: [{ type: 'text', text: 'x', font: { size: 'title1' } }] })));
+note('两条与真机不同的已知行为（`references/official-facts.md` 那张差异表的 7 / 12 行）',
+  'minScale 稿页不缩（超长只裁）；给 text 写 width/height 稿页会生效（官方只对 stack/image）');
 
-// ── ② 基座 ───────────────────────────────────────────────────────────────
 console.log('\n② 基座（画布/圆角事实源）');
 const bc = baselineCheck();
 ok('每条值都有来源、无 assumed', bc.problems.length === 0, bc.problems.join('; ') || 'ok');
 if (bc.deltas.length) note('台账里有"实测 vs 官方"的已知偏差（按设计只作校验）', bc.deltas.join('; '));
 else console.log('  PASS  实测与官方无超差');
 
-// ── ③ 接入 + 体检（拿自带的天气示例当样本）─────────────────────────────
 console.log('\n③ 接入 / 体检 / 出稿（examples/weather）');
 const example = fileURLToPath(new URL('../../examples/weather/weather.js', import.meta.url));
 const { fn, code } = await load(example);
@@ -62,9 +62,6 @@ writePage(out, `<!DOCTYPE html><html><body><div class="widget w-md">${render(tre
 const html = readFileSync(out, 'utf8');
 ok('出稿带读数浮层（writePage 幂等注入）', html.includes('eg-bar'));
 
-// ── ④ 边界：模拟 ctx 的面 / family 拒稿 / 发布面不泄漏 ────────────────────
-// 这三条对应过三个真实误判：缺 http 方法 → 脚本掉进 catch 被当成"它坏了"；
-// 锁屏档静默画成中号主屏 → 交出一张画布不对的稿；内部路径印在稿页上 → 读者照抄 ENOENT。
 console.log('\n④ 边界（模拟面 / family / 发布面）');
 const { ctx: c2 } = genericCtx({ mock: { a: 1 } });
 const METHODS = ['get', 'post', 'put', 'delete', 'head', 'options', 'patch'];
@@ -90,8 +87,6 @@ ok('四档主屏都能出稿（exit 0）',
   ['systemSmall', 'systemMedium', 'systemLarge', 'systemExtraLarge']
     .every((f) => rcOf([example, '--family', f, '--out', path.join(tmpdir(), `kit-${f}.html`)]) === 0));
 
-// 扫发布面：仓库路径 / 内部文件名 / 已删掉的旧渲染器名，一个都不许出现
-// （needle 拆着写，免得这份自检自己的源码被自己扫出来）
 const NEEDLES = ['build/' + 'tools', 'egern-' + 'official-facts', 'effect-' + 'draft-workflow', 'dsl-' + 'render'];
 const leaks = [];
 (function scan(dir) {
@@ -100,7 +95,7 @@ const leaks = [];
     if (e.isDirectory()) scan(p);
     else if (/\.(mjs|js|md)$/.test(e.name)) {
       const lines = readFileSync(p, 'utf8').split('\n');
-      if (e.name === 'CHANGELOG.md') continue;   // 它的职责就是记录旧名字
+      if (e.name === 'CHANGELOG.md') continue;
       lines.forEach((l, i) => { if (NEEDLES.some((n) => l.includes(n))) leaks.push(`${path.relative(kitRoot, p)}:${i + 1}`); });
     }
   }

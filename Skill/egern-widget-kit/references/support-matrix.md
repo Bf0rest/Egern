@@ -16,7 +16,7 @@
 
 ## 属性白名单
 
-不在下表里的属性 = 平台不认，写了也没用（`inspect` 会把它们标成「疑似无效属性」）。
+不在下表里的属性 = Egern 不认，写了也没用（`inspect` 会把它们标成「疑似无效属性」）。
 
 `alignItems`, `backgroundColor`, `backgroundGradient`, `backgroundImage`, `borderColor`, `borderRadius`, `borderWidth`, `children`, `color`, `colors`, `dark`, `date`, `direction`, `endPoint`, `family`, `flex`, `font`, `format`, `gap`, `height`, `length`, `light`, `maxLines`, `minScale`, `opacity`, `padding`, `refreshAfter`, `resizable`, `resizeMode`, `shadowColor`, `shadowOffset`, `shadowRadius`, `size`, `src`, `startPoint`, `stops`, `text`, `textAlign`, `textColor`, `type`, `url`, `weight`, `width`, `x`, `y`
 

@@ -141,24 +141,25 @@
 
 ---
 
-## 附：稿页与官方的已知差异（照它改版式前先看这张）
+## 附：稿页与官方的差异（逐条核过现渲染器）
 
-> 这张表说的是**稿页会画错 / 画不出来的地方**；官方口径为准。标「已对齐」= 工具已按官方实现。
+> 每条都用渲染器跑过一遍（`scripts/kit/selfcheck.mjs` 的断言 + 直接渲染取样式）。**「已对齐」= 稿页按官方实现**，
+> 照稿页读没问题；**「仍有差异」= 稿页画得跟真机不一样**，改版式时得绕开或显式覆盖。官方口径为准。
 
 | # | 项 | 官方口径 | 稿页现状 | 影响 |
 |---|---|---|---|---|
-| 1 | `stack.direction` 默认 | `"row"` | 渲染器按 `column` 处理（未写 direction 时） | 第三方组件里省略 direction 的 stack 会被画错 |
-| 2 | `text.textColor` 默认 | 系统主色 | 渲染器默认 `#fff` | 浅色档第三方组件会白字白底 |
-| 3 | `image.resizeMode` 默认 | `"contain"` | 已对齐 | — |
-| 4 | `borderRadius: "auto"` | 支持 | 渲染器会输出 `border-radius:auto`（非法） | 第三方组件圆角失效 |
-| 5 | `backgroundImage` | widget/stack 支持，优先级最高 | 完全忽略 | 用背景图的第三方组件画成透明 |
-| 6 | `shadow*` 三属性 | text/image/date/stack 支持 | 完全忽略 | 阴影不可见（不影响布局） |
-| 7 | `minScale` | 文本自适应缩小 | 忽略 | 长文本在稿里被裁 |
-| 8 | `date` 元素 | 官方元素，5 种 format | 渲染器无此 case → 静默空白 | 「更新时间」类第三方组件整行消失 |
-| 9 | 自适应色 `{light,dark}` | 官方支持 | 渲染器只吃字符串 | 第三方组件输出 `[object Object]` |
-| 10 | `Gradient.type/stops` | linear/radial/angular + stops | 硬写 `linear-gradient(180deg, colors[0], colors[1])` | 多色/径向/角度渐变失真 |
-| 11 | 语义字号命名 | `title`=28 / `largeTitle`=34 | 字号表里有 `title1: 28`（官方无此键） | 仅键名有误，不影响出稿 |
-| 12 | `width`/`height` 适用范围 | 仅 `stack` / `image` | 渲染器对 `text` 也生效 | 差异只在有人给 text 写宽高时 |
+| 1 | `stack.direction` 默认 | `"row"` | **已对齐**（省略 `direction` 就按 row 画） | — |
+| 2 | `text.textColor` 默认 | 系统主色 | **已对齐**（落 `var(--sys-label)`） | — |
+| 3 | `image.resizeMode` 默认 | `"contain"` | **已对齐**（显式 `cover` 也生效） | — |
+| 4 | `borderRadius: "auto"` | 支持 | **已对齐**（`inherit`，跟着容器圆角） | — |
+| 5 | `backgroundImage` | widget / stack 支持，优先级最高 | **已对齐**（高于渐变与纯色） | — |
+| 6 | `shadow*` 三属性 | text / image / date / stack 支持 | **已对齐**（`shadowRadius` 没写就不画） | — |
+| 7 | `minScale` | 文本按需缩小 | **仍有差异**：稿页不缩，超长只会被裁 | 长文本在稿里比真机更早截断，别照稿判断会不会溢出 |
+| 8 | `date` 元素 | 官方元素，5 种 `format` | **已对齐**（文案按当前时刻**模拟**，带 `≈` 前缀） | 值不是真机值，只能用来判位置与行宽 |
+| 9 | 自适应色 `{dark, light}` | 官方支持 | **已对齐**（按一侧落色） | — |
+| 10 | `Gradient.type/stops` | linear / radial / angular + `stops` | **已对齐**（角度按 `startPoint` / `endPoint` 推算） | — |
+| 11 | 语义字号命名 | `largeTitle`=34 / `title`=28 … | **已对齐**（表里没有 `title1` 这类非官方键） | — |
+| 12 | `width` / `height` 适用范围 | 仅 `stack` / `image` | **仍有差异**：稿页对 `text` 也生效 | 给 text 写了宽高时，稿里的换行位置与真机不同 |
 
 ---
 

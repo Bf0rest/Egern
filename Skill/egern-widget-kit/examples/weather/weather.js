@@ -1,9 +1,3 @@
-// 示例：天气小组件（最小类目）—— 只为证明「换类目不用碰渲染层」。
-//
-// env：
-//   CITY  城市名（默认 Shanghai）
-//
-// 数据源：open-meteo.com（免 key）。取不到就显示 `--`，**不编数据**。
 export default async function (ctx) {
   const city = (ctx.env && ctx.env.CITY) || 'Shanghai';
   let cur = null, why = '';

@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-// 第三方脚本「出稿」命令：load → 模拟 ctx 跑树 → 渲染 → 一页（含体检报告 + 读数浮层）。
-//
-// 用法：
-//   node scripts/kit/draft.mjs https://example.com/xxx.js --family systemMedium
-//   node scripts/kit/draft.mjs ./别人的.js --family systemLarge --env THEME=light --mock sample.json --out build/xxx.html
-//
-// 选项：
-//   --family <fam>      要画哪一档（默认 systemMedium）
-//   --env K=V,K2=V2     模拟 ctx 的 env
-//   --mock <file.json>  任何 json() 请求返回该样本（最粗适配；更准的要写 adapter）
-//   --out <path>        输出 html（默认写到系统临时目录）
-//
-// ⚠️ 红线：跑不起来就**不出稿**（只报体检结果）。占位数据画出来的稿必须显式标注"数据是占位"。
 
 import path from 'node:path';
 import os from 'node:os';
@@ -32,9 +19,6 @@ const env = Object.fromEntries((flag('--env', '') || '').split(',').filter(Boole
 const mockPath = flag('--mock', null);
 const out = flag('--out', path.join(os.tmpdir(), 'egern-widget-kit', 'foreign-draft.html'));
 
-// ── family：未知值报错，锁屏档拒稿 ─────────────────────────────────────────
-// 为什么宁可 exit 2：静默兜底会画出一张**画布不对**的稿（比如把 accessoryInline 画成中号主屏），
-// 而稿页抬头会照抄你输入的档名 ⇒ 读者会以为那就是锁屏上的样子。宁可不画。
 const FAM_MAIN = ['systemSmall', 'systemMedium', 'systemLarge', 'systemExtraLarge'];
 if (!FACTS.widgetFamilies.includes(family)) {
   console.error(`⛔ 未知 --family：${family}`);
@@ -67,7 +51,6 @@ const { ctx, calls } = genericCtx({ family, env, mock });
 let tree, dyn = null, err = null;
 try {
   tree = await loaded.fn(ctx);
-  // 限定：只处理 widget 脚本。不是 widget 树 ⇒ 当作结论报出来，**不画空稿**
   const chk = widgetTreeCheck(tree);
   if (!chk.ok) {
     console.error(`⛔ 这不是 widget 脚本：${chk.why}`);
@@ -82,7 +65,7 @@ const body = tree ? render(tree, cls) : '';
 const rows = (obj) => Object.entries(obj).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(String(v))}</td></tr>`).join('');
 
 const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
-<title>第三方组件预览页 · ${esc(String(src).split('/').pop())}</title>
+<title>组件预览页 · ${esc(String(src).split('/').pop())}</title>
 <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
 body{margin:0;padding:26px 30px 60px;background:#050607;color:#E2E8F0;font:14px/1.65 'Inter','Noto Sans SC',-apple-system,"Segoe UI",sans-serif}
 h1{font-size:19px;margin:0 0 6px;word-break:break-all}.lede{color:#94A3B8;font-size:13px;margin:0 0 8px;max-width:960px}
@@ -92,7 +75,7 @@ h1{font-size:19px;margin:0 0 6px;word-break:break-all}.lede{color:#94A3B8;font-s
 .widget.w-sm{width:${W.sm.w}px;height:${W.sm.h}px}.widget.w-md{width:${W.md.w}px;height:${W.md.h}px}.widget.w-lg{width:${W.lg.w}px;height:${W.lg.h}px}.widget.w-xl{width:${W.xl.w}px;height:${W.xl.h}px}
 table{border-collapse:collapse;margin-top:12px;font-size:12.5px}th,td{padding:6px 12px;border:1px solid rgba(255,255,255,.09);text-align:left;vertical-align:top}
 th{color:#94A3B8;background:rgba(255,255,255,.02)}code{background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:12px}</style></head><body>
-<h1>第三方组件预览页 · ${esc(String(src))}</h1>
+<h1>组件预览页 · ${esc(String(src))}</h1>
 <p class="lede">源码未改一行：load（规范化 ESM）→ 模拟 ctx（${family}）→ 真实 DSL 树 → 本页。读数浮层已挂。${family === 'systemExtraLarge' ? `本页画布 = iPad 档 ${W.xl.w}×${W.xl.h}（${W.xl.src}），官方只给区间，随 iPad 型号变。` : ''}</p>
 ${provenanceHtml()}
 <div class="warn"><b>这不是什么</b>：不是渲染结果、不是真机预览、不作像素依据；字体是替身。<br>
