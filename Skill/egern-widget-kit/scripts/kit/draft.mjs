@@ -30,7 +30,7 @@ const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] 
 const family = flag('--family', 'systemMedium');
 const env = Object.fromEntries((flag('--env', '') || '').split(',').filter(Boolean).map((kv) => { const i = kv.indexOf('='); return [kv.slice(0, i), kv.slice(i + 1)]; }));
 const mockPath = flag('--mock', null);
-const out = flag('--out', path.join(os.tmpdir(), 'egern-draft-kit', 'foreign-draft.html'));
+const out = flag('--out', path.join(os.tmpdir(), 'egern-widget-kit', 'foreign-draft.html'));
 
 // ── family：未知值报错，锁屏档拒稿 ─────────────────────────────────────────
 // 为什么宁可 exit 2：静默兜底会画出一张**画布不对**的稿（比如把 accessoryInline 画成中号主屏），

@@ -30,7 +30,7 @@ export async function readSource(src) {
 /** 取出 `export default async function(ctx)`（或 `export default async (ctx) => …`） */
 export async function load(src, { tmpDir } = {}) {
   const { code, from } = await readSource(src);
-  const dir = tmpDir || path.join(os.tmpdir(), 'egern-draft-kit');
+  const dir = tmpDir || path.join(os.tmpdir(), 'egern-widget-kit');
   mkdirSync(dir, { recursive: true });
   const base = String(from).split('?')[0].split('/').pop().replace(/[^\w.-]/g, '_');
   const file = path.join(dir, '_' + base.replace(/\.js$/, '') + '-esm-tmp.mjs');
