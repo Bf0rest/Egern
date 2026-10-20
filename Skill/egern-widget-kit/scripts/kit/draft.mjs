@@ -111,12 +111,22 @@ const cell = (f) => {
 };
 
 const W = cssCanvas(screenKey);
-const LAND = [
-  ['accessoryRectangular', 'w-rect'], ['accessoryCircular', 'w-circ'], ['accessoryInline', 'w-inl']
-].map(([fam, c]) => {
-  const v = boxOf(fam, screenKey) || [0, 0];
-  const radius = fam === 'accessoryCircular' ? '50%' : (fam === 'accessoryInline' ? 0 : RADIUS.lock.value + 'px');
-  return `.widget.${c}{width:${v[0]}px;height:${v[1]}px;border-radius:${radius}}`;
+const SIZEOF = {};
+for (const f of FACTS.widgetFamilies) {
+  SIZEOF[f] = f === 'systemExtraLarge'
+    ? [canvas('xl').w, canvas('xl').h]
+    : (boxOf(f, screenKey) || [0, 0]);
+}
+const RADIUS_OF = (f) => (f === 'accessoryCircular' ? '50%' : (f === 'accessoryInline' ? 0 : RADIUS.lock.value + 'px'));
+if (isLock(family) && SIZEOF[family][0] === 0) {
+  console.error(`⛔ 屏宽档 ${screenKey} 官方表里没有锁屏组件（N/A），画不出 ${family}`);
+  console.error('   换一个屏宽档（375 / 390 / 393 / 402 / 414 / 430 等），或者换主屏档。');
+  process.exit(2);
+}
+const ruleOf = (f) => `.widget.${CLS[f]}{width:${SIZEOF[f][0]}px;height:${SIZEOF[f][1]}px`;
+const RULES = FACTS.widgetFamilies.map((f) => {
+  const base = ruleOf(f);
+  return isLock(f) ? `${base};border-radius:${RADIUS_OF(f)}}` : `${base}}`;
 }).join('\n');
 const OPTIONS = screenTable().map((r) => `<option value="${r.key}"${r.key === screenKey ? ' selected' : ''}>${r.screen}${r.src === 'derived' ? '（插值）' : ''}</option>`).join('') + `<option value="ipad"${screenKey === 'ipad' ? ' selected' : ''}>iPad 820×1180（Canvas 715.5×342）</option>`;
 
@@ -131,9 +141,7 @@ h1{font-size:19px;margin:0 0 6px;word-break:break-all}.lede{color:#94A3B8;font-s
 .bar select{background:#111827;color:#E2E8F0;border:1px solid rgba(255,255,255,.16);border-radius:7px;padding:5px 8px;font:inherit}
 .bar b{color:#93C5FD;font-weight:600}
 .widget{position:relative;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;border-radius:16px}
-.widget.w-sm{width:${W.sm.w}px;height:${W.sm.h}px}.widget.w-md{width:${W.md.w}px;height:${W.md.h}px}.widget.w-lg{width:${W.lg.w}px;height:${W.lg.h}px}
-.widget.w-xl{width:${canvas('xl').w}px;height:${canvas('xl').h}px}
-${LAND}
+${RULES}
 .stage{display:inline-block;padding:14px;border-radius:18px;background:linear-gradient(135deg,#3b4657,#8b98a9 48%,#222a35)}
 .widget.plate{background:rgba(0,0,0,.45)}
 table{border-collapse:collapse;margin-top:12px;font-size:12.5px}th,td{padding:6px 12px;border:1px solid rgba(255,255,255,.09);text-align:left;vertical-align:top}
@@ -182,6 +190,17 @@ document.getElementById('eg-scr').addEventListener('change', apply);
 apply();
 </script>
 </body></html>`;
+
+const badSize = families
+  .filter((f) => SIZEOF[f][0] > 0 && SIZEOF[f][1] > 0)
+  .filter((f) => html.indexOf(ruleOf(f)) < 0)
+  .map((f) => `${f}（缺 ${ruleOf(f)}…）`);
+if (badSize.length) {
+  console.error(`⛔ 画布规则缺失：${badSize.join('，')}`);
+  console.error('   每个渲染出来的档位都必须在稿页里有一条写死宽高的规则；');
+  console.error('   缺了它 .widget 会退化成一列按内容撑开的盒子（成对对比时高度会差出一个 gap）。');
+  process.exit(3);
+}
 
 writePage(out, html);
 console.log(`已生成：${out}`);

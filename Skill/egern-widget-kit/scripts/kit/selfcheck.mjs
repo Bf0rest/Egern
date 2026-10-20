@@ -104,6 +104,17 @@ ok('四档主屏都能出稿（exit 0）',
   ok('--screen 430 ⇒ 中件画布 364×170（官方表值，不做比例缩放）', /w-md\{width:364px;height:170px\}/.test(h));
 }
 ok('--screen 拼错 → exit 2', rcOf([example, '--family', 'systemMedium', '--screen', '999']) === 2);
+{
+  const p = path.join(tmpdir(), 'kit-size-rules.html');
+  let h = '';
+  try { execFileSync(process.execPath, [draftCli, example, '--family', 'systemLarge', '--out', p], { stdio: 'pipe' }); h = readFileSync(p, 'utf8'); } catch (e) { h = ''; }
+  const rules = h.match(/\.widget\.w-[a-z]+\{[^}]*\}/g) || [];
+  ok('稿页每个档位的画布都写死宽高（缺规则会退化成一列按内容撑开的盒子）',
+    rules.length >= 7 && rules.every((r) => /width:\d/.test(r) && /height:\d/.test(r)),
+    rules.length + ' 条规则');
+}
+ok('官方表里没有锁屏组件的屏宽档（320）出锁屏稿 → exit 2',
+  rcOf([example, '--family', 'accessoryRectangular', '--screen', '320']) === 2);
 
 const NEEDLES = ['build/' + 'tools', 'egern-' + 'official-facts', 'effect-' + 'draft-workflow', 'dsl-' + 'render'];
 const leaks = [];
