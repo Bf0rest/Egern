@@ -15,6 +15,7 @@
 - **E** = <https://egernapp.com/docs/configuration/env>
 - **S** = <https://egernapp.com/docs/configuration/scriptings>
 - **J** = <https://egernapp.com/docs/javascript-api>
+- **H** = <https://developer.apple.com/design/human-interface-guidelines/widgets>（Apple HIG；只有尺寸与外观类事实引自它）
 
 ---
 
@@ -138,6 +139,58 @@
 - `max_size`：请求/响应体处理上限，默认 1048576（1MB）——仅 request/response 脚本。
 - `body_required` / `binary_body`：默认 `false`。
 - `disabled`：是否禁用。
+
+---
+
+## 9. 组件尺寸与官方「缩放」（H / #Specifications）
+
+出处：**H** = <https://developer.apple.com/design/human-interface-guidelines/widgets#Specifications>（核对日期 **2026-10-20**；
+该页变更记录里最近一条是 2026-10-13「Added guidance for Apple HomeView, and updated watchOS specifications」）。
+
+### 9.1 iOS 每屏一档，没有比例公式（H / #iOS-dimensions）
+
+| 屏宽（pt，竖屏） | Small | Medium | Large | Circular | Rectangular | Inline |
+|---|---|---|---|---|---|---|
+| 430×932 | 170×170 | 364×170 | 364×382 | 76×76 | 172×76 | 257×26 |
+| 428×926 | 170×170 | 364×170 | 364×382 | 76×76 | 172×76 | 257×26 |
+| 414×896 | 169×169 | 360×169 | 360×379 | 76×76 | 160×72 | 248×26 |
+| 414×736 | 159×159 | 348×157 | 348×357 | 76×76 | 170×76 | 248×26 |
+| 393×852 | 158×158 | 338×158 | 338×354 | 72×72 | 160×72 | 234×26 |
+| 390×844 | 158×158 | 338×158 | 338×354 | 72×72 | 160×72 | 234×26 |
+| 375×812 | 155×155 | 329×155 | 329×345 | 72×72 | 157×72 | 225×26 |
+| 375×667 | 148×148 | 321×148 | 321×324 | 68×68 | 153×68 | 225×26 |
+| 360×780 | 155×155 | 329×155 | 329×345 | 72×72 | 157×72 | 225×26 |
+| 320×568 | 141×141 | 292×141 | 292×311 | N/A | N/A | N/A |
+
+- **官方不给换算公式**：只有这张逐屏的表，**组件不随屏宽按比例缩放**（同一屏宽内 Small/Medium/Large 是各自独立的框）。
+  ⇒ 任何「按比例推算」都是插值，必须标 `derived`，不能当官方值。
+- 表里没有的屏宽（如 iPhone 17 的 **402**）只能插值 + 真机实测校准；402 记作 `derived`，并附实测对照。
+- 一个反直觉的行：**414×736 的 Medium 高 157，比同档 Small 的 159 还小** —— 官方原表如此。
+- 320×568 这一档官方没有锁屏组件（`N/A`），选这一档时锁屏三档无画布可画。
+
+### 9.2 iPad 有 Canvas / Device 两列（H / #iPadOS-dimensions）
+
+iPad 段每个设备给**两行**：`Canvas`（设计画布）与 `Device`（实际绘制），同一档两个数。
+
+| iPad 屏（pt） | Canvas XL | Device XL | 比值 |
+|---|---|---|---|
+| 768×1024 / 744×1133 | 634.5×305.5 | 540×260 | 0.851 |
+| 810×1080 | 669×320.5 | 568×272 | 0.849 |
+| 820×1180 / 834×1194 | 715.5×342 | 628×300 | 0.877 |
+| 834×1112 | 682×327.5 | 600×288 | 0.880 |
+| 1024×1366 | 795×378.5 | 748×356 | 0.941 |
+| 1192×1590 / 954×1373 / 970×1389 | 860×412 / 726×350 | 同左 | 1.000 |
+
+- **比值逐设备不同（0.849 ~ 1.000），不是一条统一缩放**。要「官方怎么缩放」，答案是：没有通用比例，
+  只有这张成对的表；`Display Zoom = More Space` 的三档两列相等。
+- 本仓 `systemExtraLarge` 用 **820×1180 的 Canvas 列（715.5×342）**，并在 `lib/baseline.mjs` 里同时记了 Device 列（628×300）。
+
+### 9.3 与尺寸相关的两条通用建议（H / #Best-practices）
+
+- 「Design for various devices and scale factors **using the values listed in Specifications**」——
+  官方明确让按表取值，而不是自己按比例缩。
+- 系统会在某些场合**放大组件并去掉背景**（iPhone 锁屏 StandBy、HomeView Modular face），
+  低光下还会转成单色红 —— 这类放大是系统行为，脚本侧没有对应参数。
 
 ---
 

@@ -36,13 +36,23 @@ node scripts/kit/draft.mjs ./my-widget.js --family systemLarge --env CITY=Shangh
 node scripts/kit/selfcheck.mjs
 ```
 
-`--family` 只接受 `systemSmall` / `systemMedium` / `systemLarge` / `systemExtraLarge`（iPad 画布）。
+`--family` 接受全部 7 档（一页只渲这一档）：`systemSmall` / `systemMedium` / `systemLarge` /
+`systemExtraLarge`（iPad 画布）/ `accessoryRectangular` / `accessoryCircular` / `accessoryInline`（锁屏槽位）。
 
-**会 `exit 2` 的三种情况，不要绕过：**
+**`--screen <档>`** 选屏宽档（默认 `402`，即 iPhone 17 那只插值档）；稿页顶部也有同一个「屏宽档」下拉，
+换档只换画布，用来看**同一棵树在不同档位里的排布**。档位全部来自 Apple HIG
+《Widgets → iOS dimensions》原表：`320` / `360` / `375` / `375667` / `390` / `393` / `402` /
+`414` / `414736` / `428` / `430`，另加页面下拉里的 `iPad 820×1180`。
 
-- 锁屏三档（`accessoryCircular` / `accessoryRectangular` / `accessoryInline`）—— 渲染层没有锁屏画布，
-  硬画只会画成中号主屏；一张画布不对的稿比没有稿更糟。锁屏形状只能上真机。
-- `--family` 拼错 —— 不会静默兜底成中号。
+切尺寸只换**画布**（官方表里那一档的 pt 值，1:1），**不做任何按比例缩放** ——
+官方没有「按屏宽等比缩」这回事，每个屏宽是一档独立数值；表里没有的屏宽（402）是插值出来的，页面上标「（插值）」。
+
+锁屏三档按 Apple HIG 槽位尺寸出稿，并垫一块**半透明黑底 + 壁纸替身** —— 真机上的锁屏组件是透明的，
+没有底就看不出内容区在哪。稿页的深浅可以看层次，**颜色不算数**（锁屏上 `textColor` 由系统压成单色）。
+
+**会 `exit 2` 的两种情况，不要绕过：**
+
+- `--family` / `--screen` 拼错 —— 不会静默兜底成中号或 402。
 - 返回值不是 `{ type: 'widget' }`（例如 panel 脚本的 `{title, content}`）—— 不画空稿。
 
 脚本 import 失败或不是 ESM 时：只出体检报告，不出稿。

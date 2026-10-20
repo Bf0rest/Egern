@@ -81,11 +81,29 @@ const rcOf = (args) => {
   try { execFileSync(process.execPath, [draftCli, ...args], { stdio: 'pipe' }); return 0; }
   catch (e) { return e.status; }
 };
-ok('锁屏档拒稿（accessoryCircular → exit 2）', rcOf([example, '--family', 'accessoryCircular']) === 2);
+ok('锁屏三档都能出稿（exit 0）',
+  ['accessoryRectangular', 'accessoryCircular', 'accessoryInline']
+    .every((f) => rcOf([example, '--family', f, '--out', path.join(tmpdir(), `kit-${f}.html`)]) === 0));
+{
+  const p = path.join(tmpdir(), 'kit-lock-shape.html');
+  let html = '';
+  try { execFileSync(process.execPath, [draftCli, example, '--family', 'accessoryRectangular', '--out', p], { stdio: 'pipe' }); html = readFileSync(p, 'utf8'); } catch (e) { html = ''; }
+  ok('锁屏稿按 HIG 槽位画布（矩形 160×72）+ 半透明辅助底',
+    /width:160px;height:72px/.test(html) && /background:rgba\(0,0,0,\.45\)/.test(html));
+}
 ok('拼错的 family 报错（→ exit 2）', rcOf([example, '--family', 'medium']) === 2);
 ok('四档主屏都能出稿（exit 0）',
   ['systemSmall', 'systemMedium', 'systemLarge', 'systemExtraLarge']
     .every((f) => rcOf([example, '--family', f, '--out', path.join(tmpdir(), `kit-${f}.html`)]) === 0));
+{
+  const p = path.join(tmpdir(), 'kit-screen.html');
+  let h = '';
+  try { execFileSync(process.execPath, [draftCli, example, '--family', 'systemMedium', '--screen', '430', '--out', p], { stdio: 'pipe' }); h = readFileSync(p, 'utf8'); } catch (e) { h = ''; }
+  ok('稿页带「屏宽档」下拉（同一棵树换画布），没有多余的组件尺寸下拉',
+    /id="eg-scr"/.test(h) && /const SIZES = \{/.test(h) && !/id="eg-fam"/.test(h));
+  ok('--screen 430 ⇒ 中件画布 364×170（官方表值，不做比例缩放）', /w-md\{width:364px;height:170px\}/.test(h));
+}
+ok('--screen 拼错 → exit 2', rcOf([example, '--family', 'systemMedium', '--screen', '999']) === 2);
 
 const NEEDLES = ['build/' + 'tools', 'egern-' + 'official-facts', 'effect-' + 'draft-workflow', 'dsl-' + 'render'];
 const leaks = [];
