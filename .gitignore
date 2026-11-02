@@ -2,8 +2,6 @@
 !.gitignore
 !Widget
 !Widget/**
-!Skill
-!Skill/**
 !README.md
 !LICENSE
 !.gitattributes
