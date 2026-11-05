@@ -323,6 +323,7 @@ async function __render(ctx) {
     const cached = kvGet(skey);
     const cachedScore = cached ? __finiteScore(cached.fraudScore) : null;
     if (cached && typeof cached === 'object' && cachedScore !== null
+        && cached.ip === egressIp
         && (now - (cached.ts || 0)) < __SCORE_TTL) {
       data = cached;
       data.fraudScore = Math.max(0, Math.min(100, cachedScore));
