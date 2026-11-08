@@ -3,58 +3,80 @@
 //   GROUP     —— 策略组名称（留空 = DIRECT）
 //   THEME     —— 浅色 = 使用浅色配色（留空 = 深色）
 //   STYLE     —— 透明 = 透明背景（需配合主屏透明风格使用，且只在主屏页面生效）
-//   IP        —— 隐藏 = 隐藏 IP 中段信息
+//   IP        —— 隐藏 = 隐藏 IP 中段信息；测试 = IP 用 255.255.255.255 占位（看最宽地址的排版）
 //   EGG       —— 开 = 彩蛋（锁屏方形档显示图标）
 
-const __IP_URL = 'http://cloudflare.com/cdn-cgi/trace';
 const __TM_URL = 'http://www.gstatic.com/generate_204';
-const __IP_TIMEOUT = 5000;
+const __TM_TIMEOUT = 3000;
 
 const __SCORE_URL = 'https://my.ippure.com/v1/info';
-const __SCORE_TIMEOUT = 8000;
-const __SCORE_TTL = 6 * 3600000;
+const __SCORE_TIMEOUT = 6000;
 
 const __ASN_URL = 'https://stat.ripe.net/data/as-overview/data.json?resource=AS';
 const __ASN_TTL = 30 * 24 * 3600000;
+const __ASN_KEY = 'ippure_asn';
+const __ASN_MAX = 32;
 
-const __CHART_KEY = 'lp_urltest_v1';
+const __D_V4 = 'https://1.1.1.1/cdn-cgi/trace';
+const __D_V6 = 'https://[2606:4700:4700::1111]/cdn-cgi/trace';
+const __DUAL_OK_TTL = 24 * 3600000;
+const __DUAL_BAD_TTL = 20 * 60 * 1000;
+const __DUAL_KEY = 'ippure_dual';
+const __DUAL_MAX = 8;
+
+const __DBG_URL = '';
+const __DBG_TAG = 'linkprobe';
+
+const __CHART_KEY = 'ippure_chart';
 const __CHART_MAX = 40;
 const __CHART_CAP = 400;
+const __CHART_GAP_SOLID = 8;
 const __CHART_MIN_H = 3;
-const __CHART_CAP_H = 1;
-const __CHART_GAP = 2;
-const __CHART_COLOR_DARK = '#34D399';
-const __CHART_COLOR_LIGHT = '#0070f3';
+const __CHART_R_SOLID = 3;
+const __CHART_DUAL_MIN_DIFF = 20;
+const __CHART_BACK_OP = 0.2;
+const __CHART_BAR = {
+  dark: { bottom: '#0B5F45', top: '#00F0A0' },
+  light: { bottom: '#0066CC', top: '#64B5FF' }
+};
 
-const __CHART_W_MID = 321;
+const __CHART_W_SM = 134;
+const __CHART_H_SM = 69.5;
+const __CHART_H_SM_V6 = 67.5;
+const __CHART_W_MID = 316;
 const __CHART_W_LARGE = 316;
 const __CHART_W_XL = 687.5;
-const __CHART_H_MID = 34;
+const __CHART_H_MID = 66;
+const __CHART_H_MID_V6 = 76;
 const __CHART_H_LARGE = 80;
 const __CHART_H_XL = 71;
 
-const __ISP_MAX = { large: 275, rect: 132, inline: 200 };
+const __ISP_MAX = { large: 275, rect: 150, inline: 200 };
 const __RISK_CUTS = [15, 25, 40, 50, 70];
-const __RISK_COLORS = ['#22C55E', '#84CC16', '#EAB308', '#F59E0B', '#F97316', '#DC2626'];
+const __RISK_COLORS = {
+  dark: ['#22C55E', '#84CC16', '#EAB308', '#F59E0B', '#F97316', '#DC2626'],
+  light: ['#0066CC', '#1D7FD1', '#EAB308', '#F59E0B', '#F97316', '#DC2626']
+};
 const __RISK_KEYS = ['house', 'sparkles', 'neutral', 'thinking', 'warning', 'poop'];
 
 const __THEME = {
   dark: { bgTop: '#0C0D0F', bgBottom: '#141619', text: '#F8FAFC', secondary: '#94A3B8', muted: '#64748B' },
-  light: { bgTop: '#ffffff', bgBottom: '#e9ebef', text: '#181a20', secondary: '#707a8a', muted: '#929aa5' }
+  light: { bgTop: '#FFFFFE', bgBottom: '#FFFFFE', text: '#181a20', secondary: '#707a8a', muted: '#929aa5' }
 };
-const __GOOD = '#34D399';
-const __WARN = '#FACC15';
+const __SEM = {
+  dark: { good: '#34D399', warn: '#FACC15' },
+  light: { good: '#0071E3', warn: '#E78B09' }
+};
 const __MONO_TEXT = '#FFFFFF';
 const __MONO = { hi: 1, mid: 0.72, weak: 0.5, faint: 0.34 };
 
 const __WT = { light: 'light', med: 'medium', semi: 'semibold', bold: 'bold' };
 const __SZ = {
-  scoreSmall: 50,
-  netSmall: 9,
-  dotSep: 2,
+  smBadge: 8,
+  smDot: 2,
   dotPair: 5,
-  countrySmall: 12,
-  citySmall: 10,
+  midDot: 4,
+  midBadge: 10,
   rectIp: 16,
   rectSub: 12
 };
@@ -98,7 +120,9 @@ function __asnFromHolder(holder) {
   if (sp > 0) {
     const head = t.slice(0, sp).replace(/-[A-Z0-9]+$/, '');
     const rest = t.slice(sp + 1);
-    if (head && rest.toLowerCase().indexOf(head.toLowerCase()) >= 0) return rest;
+    const norm = (v) => String(v || '').toLowerCase().replace(/[^0-9a-z]+/g, '');
+    const nh = norm(head);
+    if (nh && norm(rest).indexOf(nh) >= 0) return rest;
   }
   return t;
 }
@@ -111,7 +135,7 @@ async function __fetchAsnName(ctx, asn, policy) {
     if (!r || r.status !== 200) return undefined;
     const j = await r.json();
     const holder = j && j.data && j.data.holder ? String(j.data.holder) : '';
-    return holder ? __asnFromHolder(holder) : '';
+    return { name: holder ? __asnFromHolder(holder) : '', raw: holder };
   } catch (_) {
     return undefined;
   }
@@ -133,7 +157,7 @@ function __txtW(s, size) {
   return w * size;
 }
 
-function __ispText(asn, org, slot) {
+function __ispText(asn, org, slot, px) {
   const num = String(asn === undefined || asn === null ? '' : asn).trim().replace(/^as\s*/i, '');
   let name = String(org || '').replace(/\s+/g, ' ').trim();
   const bare = /^(?:as\s*)?(\d+)$/i.exec(name);
@@ -141,7 +165,7 @@ function __ispText(asn, org, slot) {
   if (slot === 'mid' || slot === 'net') return (num ? 'AS' + num : name) || null;
   const text = name || (num ? 'AS' + num : '');
   if (!text) return null;
-  const size = slot === 'inline' ? 17 : 12;
+  const size = px || (slot === 'inline' ? 17 : 12);
   const max = __ISP_MAX[slot] || __ISP_MAX.large;
   if (__txtW(text, size) <= max) return text;
   let cut = text;
@@ -186,11 +210,6 @@ function __maskIp(ip) {
   return s;
 }
 
-function __parseTraceIp(text) {
-  const m = /(?:^|\n)ip=([^\s\r\n]+)/.exec(String(text || ''));
-  return m ? m[1] : null;
-}
-
 function __r2(n) {
   return String(Math.round(n * 100) / 100);
 }
@@ -205,10 +224,14 @@ const __RISK_ICONS = {
 };
 
 
-async function __render(ctx) {
+async function __render(ctx, diag) {
   const strategyGroup = ctx.env.GROUP || 'DIRECT';
   const widgetFamily = ctx.widgetFamily || 'systemLarge';
   const hideIp = __wantHideIp(ctx.env.IP);
+  const ipWide = String(ctx.env.IP || '').trim() === '测试';
+  if (!diag || typeof diag !== 'object') diag = {};
+  let ipStatus = 0;
+  let ipMs = null;
 
   const eggRaw = String(ctx.env.EGG || '').trim().toLowerCase();
   const egg = ['开', 'on', 'true', '1'].indexOf(eggRaw) >= 0;
@@ -220,15 +243,45 @@ async function __render(ctx) {
   const isGlass = styleRaw === 'glass' || styleRaw === '透明';
 
   const C = __THEME[isLight ? 'light' : 'dark'];
-  const bg = isGlass ? {} : {
-    backgroundGradient: isLight
-      ? { type: 'linear', colors: [C.bgTop, C.bgBottom], stops: [0.55, 1], startPoint: { x: 0.5, y: 0 }, endPoint: { x: 0.5, y: 1 } }
-      : { type: 'linear', colors: [C.bgTop, C.bgBottom], startPoint: { x: 0.5, y: 0 }, endPoint: { x: 0.5, y: 1 } }
-  };
+  const G = __SEM[isLight ? 'light' : 'dark'].good;
+  const W = __SEM[isLight ? 'light' : 'dark'].warn;
+  const bg = isGlass ? {} : (isLight
+    ? { backgroundColor: C.bgTop }
+    : { backgroundGradient: { type: 'linear', colors: [C.bgTop, C.bgBottom], startPoint: { x: 0.5, y: 0 }, endPoint: { x: 0.5, y: 1 } } });
 
   const now = Date.now();
   const kvGet = (k) => { try { return ctx.storage.getJSON(k); } catch (_) { return null; } };
   const kvSet = (k, v) => { try { ctx.storage.setJSON(k, v); } catch (_) {} };
+  const kvDel = (k) => { try { ctx.storage.delete(k); } catch (_) {} };
+
+  const kvSave = (k, m, cap) => {
+    const keys = Object.keys(m).sort((a, b) => ((m[b] && m[b].ts) || 0) - ((m[a] && m[a].ts) || 0));
+    const out = {};
+    for (let i = 0; i < keys.length && i < cap; i++) out[keys[i]] = m[keys[i]];
+    if (!Object.keys(out).length) kvDel(k);
+    else kvSet(k, { v: 2, m: out });
+    return out;
+  };
+
+  const kvRead = (k, cap, valid) => {
+    const raw = kvGet(k);
+    const src = (raw && typeof raw === 'object' && raw.m && typeof raw.m === 'object') ? raw.m : {};
+    const keep = {};
+    let dirty = false;
+    Object.keys(src).forEach((key) => {
+      const e = src[key];
+      if (e && typeof e === 'object' && typeof e.ts === 'number' && valid(e)) keep[key] = e;
+      else dirty = true;
+    });
+    if (!dirty && Object.keys(keep).length === Object.keys(src).length) return keep;
+    return kvSave(k, keep, cap);
+  };
+
+  const kvPut = (k, key, entry, cap, valid) => {
+    const m = kvRead(k, cap, valid);
+    m[key] = entry;
+    kvSave(k, m, cap);
+  };
 
   async function probeOnce(url, policy, timeout, isHead) {
     const t0 = Date.now();
@@ -246,129 +299,182 @@ async function __render(ctx) {
     }
   }
 
-  const cold = await probeOnce(__IP_URL, strategyGroup, __IP_TIMEOUT);
-  const egressIp = __parseTraceIp(cold.text);
-  const dead = !egressIp;
-
-  const drawChart = widgetFamily === 'systemMedium' || widgetFamily === 'systemLarge' || widgetFamily === 'systemExtraLarge';
-  let chartMs = null;
-  if (drawChart) {
-    const p2 = await probeOnce(__TM_URL, strategyGroup, __IP_TIMEOUT, true);
-    const p3 = await probeOnce(__TM_URL, strategyGroup, __IP_TIMEOUT, true);
-    const ok = [p2, p3].filter((p) => p.ok && p.ms > 0).map((p) => p.ms);
-    chartMs = ok.length
-      ? Math.min.apply(null, ok)
-      : ((cold.ok && cold.ms > 0) ? cold.ms : null);
+  async function fetchScore() {
+    const t0 = Date.now();
+    try {
+      const r = await ctx.http.get(__SCORE_URL, { policy: strategyGroup, timeout: __SCORE_TIMEOUT });
+      ipStatus = (r && r.status) || 0;
+      ipMs = Date.now() - t0;
+      if (!r || r.status !== 200) return null;
+      const body = await r.json();
+      if (!__usableMeta(body)) return null;
+      const s = __finiteScore(body.fraudScore);
+      body.fraudScore = (s === null ? null : Math.max(0, Math.min(100, s)));
+      return body;
+    } catch (_) {
+      ipMs = Date.now() - t0;
+      return null;
+    }
   }
 
-  const chartColor = isLight ? __CHART_COLOR_LIGHT : __CHART_COLOR_DARK;
-  const sample = (dead || chartMs === null) ? null : Math.round(chartMs);
+  const drawChart = widgetFamily === 'systemSmall' || widgetFamily === 'systemMedium' || widgetFamily === 'systemLarge' || widgetFamily === 'systemExtraLarge';
+
+  const scoreTask = fetchScore();
+
+  let chartMs = null;
+  let chartHi = null;
+  if (drawChart) {
+    const p2 = await probeOnce(__TM_URL, strategyGroup, __TM_TIMEOUT, true);
+    const p3 = await probeOnce(__TM_URL, strategyGroup, __TM_TIMEOUT, true);
+    const ok = [p2, p3].filter((p) => p.ok && p.ms > 0).map((p) => p.ms);
+    if (ok.length) {
+      chartMs = Math.min.apply(null, ok);
+      chartHi = Math.max.apply(null, ok);
+    }
+  }
+
+  const data = await scoreTask;
+  const dead = !data;
+
+  const isV6 = !!(data && typeof data.ip === 'string' && data.ip.indexOf(':') >= 0);
+  let dual = false;
+  let dualHit = null;
+  let dualAge = null;
+  let dv4 = null;
+  let dv6 = null;
+  if (isV6 && !dead && data && data.ip) {
+    const dualOk = (e) => typeof e.d === 'boolean' && (now - e.ts) < (e.d === true ? __DUAL_OK_TTL : __DUAL_BAD_TTL);
+    const hit = kvRead(__DUAL_KEY, __DUAL_MAX, dualOk)[data.ip];
+    if (hit) {
+      dual = hit.d;
+      dualHit = true;
+      dualAge = now - hit.ts;
+    } else {
+      dualHit = false;
+      const pair = await Promise.all([
+        probeOnce(__D_V4, strategyGroup, __TM_TIMEOUT),
+        probeOnce(__D_V6, strategyGroup, __TM_TIMEOUT)
+      ]);
+      dv4 = { ok: !!(pair[0] && pair[0].ok), s: (pair[0] && pair[0].status) || 0, ms: (pair[0] && pair[0].ms) || 0 };
+      dv6 = { ok: !!(pair[1] && pair[1].ok), s: (pair[1] && pair[1].status) || 0, ms: (pair[1] && pair[1].ms) || 0 };
+      dual = !!(dv4.ok && dv6.ok);
+      kvPut(__DUAL_KEY, data.ip, { d: dual, ts: now }, __DUAL_MAX, dualOk);
+    }
+  }
+
+  const chartBar = isLight ? __CHART_BAR.light : __CHART_BAR.dark;
+  const sample = (chartMs === null) ? null : { lo: Math.round(chartMs), hi: Math.round(chartHi === null ? chartMs : chartHi) };
 
   let pts = [];
   if (drawChart) {
     const ring = kvGet(__CHART_KEY);
     pts = (ring && Array.isArray(ring.pts) ? ring.pts : [])
-      .filter((p) => Array.isArray(p) && p.length === 2 && typeof p[0] === 'number' && isFinite(p[0]))
-      .map((p) => [p[0], (typeof p[1] === 'number' && isFinite(p[1]) && p[1] >= 0) ? p[1] : null]);
-    pts.push([now, sample]);
+      .filter((p) => Array.isArray(p) && p.length >= 2 && typeof p[0] === 'number' && isFinite(p[0]))
+      .map((p) => {
+        const lo = (typeof p[1] === 'number' && isFinite(p[1]) && p[1] >= 0) ? p[1] : null;
+        const hi = (typeof p[2] === 'number' && isFinite(p[2]) && p[2] >= 0) ? p[2] : lo;
+        return [p[0], lo, hi];
+      });
+    pts.push([now, sample ? sample.lo : null, sample ? sample.hi : null]);
     while (pts.length > __CHART_MAX) pts.shift();
     kvSet(__CHART_KEY, { v: 1, pts: pts });
   }
 
   function chartSVG(values, w, h) {
     const pitch = w / values.length;
-    const bar = pitch - __CHART_GAP;
+    const bar = pitch - __CHART_GAP_SOLID;
+    const back = [];
     const body = [];
-    const caps = [];
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
-      if (v === null || v === undefined) continue;
-      const bh = Math.max(__CHART_MIN_H, Math.max(0, Math.min(1, v / __CHART_CAP)) * h);
-      const x = i * pitch + __CHART_GAP / 2;
-      const y = h - bh;
-      body.push("<rect x='" + __r2(x) + "' y='" + __r2(y) + "' width='" + __r2(bar) + "' height='" + __r2(bh) + "' fill='url(#g)'/>");
-      caps.push("<rect x='" + __r2(x) + "' y='" + __r2(y) + "' width='" + __r2(bar) + "' height='" + __r2(Math.min(__CHART_CAP_H, bh / 2)) + "' fill='" + chartColor + "'/>");
+      if (!v) continue;
+      const x = __r2(i * pitch + __CHART_GAP_SOLID / 2);
+      const hi = (typeof v.hi === 'number' && v.hi > v.lo) ? v.hi : v.lo;
+      if (hi - v.lo >= __CHART_DUAL_MIN_DIFF) {
+        const hh = Math.max(__CHART_MIN_H, Math.max(0, Math.min(1, hi / __CHART_CAP)) * h);
+        back.push("<rect x='" + x + "' y='" + __r2(h - hh) + "' width='" + __r2(bar) + "' height='" + __r2(hh)
+          + "' rx='" + __r2(Math.min(__CHART_R_SOLID, hh / 2)) + "' fill='" + chartBar.top + "'/>");
+      }
+      const bh = Math.max(__CHART_MIN_H, Math.max(0, Math.min(1, v.lo / __CHART_CAP)) * h);
+      body.push("<rect x='" + x + "' y='" + __r2(h - bh) + "' width='" + __r2(bar) + "' height='" + __r2(bh)
+        + "' rx='" + __r2(Math.min(__CHART_R_SOLID, bh / 2)) + "' fill='url(#g)'/>");
     }
+    const backLayer = back.length ? "<g opacity='" + __CHART_BACK_OP + "'>" + back.join('') + "</g>" : '';
     return "<svg xmlns='http://www.w3.org/2000/svg' width='" + __r2(w) + "' height='" + __r2(h) + "' viewBox='0 0 " + __r2(w) + " " + __r2(h) + "'>"
-      + "<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>"
-      + "<stop offset='0' stop-color='" + chartColor + "' stop-opacity='0.3'/>"
-      + "<stop offset='1' stop-color='" + chartColor + "' stop-opacity='0'/>"
+      + "<defs><linearGradient id='g' x1='0' y1='1' x2='0' y2='0'>"
+      + "<stop offset='0' stop-color='" + chartBar.bottom + "'/>"
+      + "<stop offset='1' stop-color='" + chartBar.top + "'/>"
       + "</linearGradient></defs>"
-      + body.join('') + caps.join('') + '</svg>';
+      + backLayer + body.join('') + '</svg>';
   }
 
-  function chartRow(slots, h, w) {
+  function miniBadge(text, color) {
+    const node = {
+      type: 'stack',
+      direction: 'row',
+      padding: [2, 6, 2, 6],
+      borderRadius: 999,
+      children: [
+        { type: 'text', text: text, font: { size: __SZ.midBadge, weight: __WT.med }, textColor: color }
+      ]
+    };
+    if (/^#[0-9A-Fa-f]{6}$/.test(String(color))) node.backgroundColor = String(color) + '1F';
+    return node;
+  }
+
+  function chartRow(slots, h, w, noFlex) {
     const tail = pts.slice(-slots);
     const values = [];
     for (let i = 0; i < slots - tail.length; i++) values.push(null);
-    for (let i = 0; i < tail.length; i++) values.push(tail[i][1]);
-    return {
+    for (let i = 0; i < tail.length; i++) {
+      const lo = tail[i][1];
+      const hi = tail[i][2];
+      values.push(lo === null ? null : { lo: lo, hi: (typeof hi === 'number' ? hi : lo) });
+    }
+    const row = {
       type: 'stack',
       direction: 'row',
-      alignItems: 'center',
-      flex: 1,
-      children: [{
-        type: 'image',
-        src: 'data:image/svg+xml,' + encodeURIComponent(chartSVG(values, w, h)),
-        height: h,
-        flex: 1,
-        resizeMode: 'contain'
-      }]
+      alignItems: 'end',
+      children: [
+        { type: 'spacer' },
+        {
+          type: 'image',
+          src: 'data:image/svg+xml,' + encodeURIComponent(chartSVG(values, w, h)),
+          width: w,
+          height: h,
+          resizeMode: 'contain'
+        },
+        { type: 'spacer' }
+      ]
     };
-  }
-
-  let data = null;
-  if (!dead) {
-    const skey = 'ippure_score_' + egressIp;
-    const cached = kvGet(skey);
-    const cachedScore = cached ? __finiteScore(cached.fraudScore) : null;
-    if (cached && typeof cached === 'object' && cachedScore !== null
-        && cached.ip === egressIp
-        && (now - (cached.ts || 0)) < __SCORE_TTL) {
-      data = cached;
-      data.fraudScore = Math.max(0, Math.min(100, cachedScore));
-    } else {
-      try {
-        const resp = await ctx.http.get(__SCORE_URL, { policy: strategyGroup, timeout: __SCORE_TIMEOUT });
-        if (resp && resp.status === 200) {
-          const body = await resp.json();
-          if (__usableMeta(body)) {
-            const s = __finiteScore(body.fraudScore);
-            body.fraudScore = (s === null ? null : Math.max(0, Math.min(100, s)));
-            data = body;
-            if (s !== null) {
-              kvSet(skey, {
-                ip: body.ip, asn: body.asn, asOrganization: body.asOrganization,
-                country: body.country, countryCode: body.countryCode,
-                region: body.region, city: body.city,
-                fraudScore: body.fraudScore, isResidential: body.isResidential,
-                isBroadcast: body.isBroadcast, ts: now
-              });
-            }
-          }
-        }
-      } catch (_) {}
-    }
+    if (!noFlex) row.flex = 1;
+    return row;
   }
 
   let asnName = null;
+  let asnRaw = null;
+  let asnHit = null;
   if (data && data.asn !== undefined && data.asn !== null) {
-    const akey = 'ippure_asn_' + String(data.asn).trim().replace(/^as\s*/i, '');
-    const hit = kvGet(akey);
-    if (hit && typeof hit === 'object' && (now - (hit.ts || 0)) < __ASN_TTL) {
-      asnName = hit.n || null;
+    const asnId = String(data.asn).trim().replace(/^as\s*/i, '');
+    const asnOk = (e) => (now - e.ts) < __ASN_TTL;
+    const hit = asnId ? kvRead(__ASN_KEY, __ASN_MAX, asnOk)[asnId] : null;
+    if (hit) {
+      asnName = __asnFromHolder(hit.n) || null;
+      asnHit = true;
     } else {
+      asnHit = false;
       const got = await __fetchAsnName(ctx, data.asn, strategyGroup);
       if (got !== undefined) {
-        asnName = got || null;
-        kvSet(akey, { n: got, ts: now });
+        asnName = got.name || null;
+        asnRaw = got.raw || null;
+        if (asnId) kvPut(__ASN_KEY, asnId, { n: got.name, ts: now }, __ASN_MAX, asnOk);
       }
     }
   }
 
   const riskScore = data ? __finiteScore(data.fraudScore) : null;
   const riskTier = __riskTier(riskScore);
-  const riskColor = riskTier === null ? null : __RISK_COLORS[riskTier];
+  const riskColor = riskTier === null ? null : __RISK_COLORS[isLight ? 'light' : 'dark'][riskTier];
 
   const d = new Date();
   const stamp = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -383,7 +489,7 @@ async function __render(ctx) {
           direction: 'row',
           gap: 6,
           children: [
-            { type: 'image', src: 'sf-symbol:airplane', width: iconSize, height: iconSize, color: __GOOD },
+            { type: 'image', src: 'sf-symbol:airplane', width: iconSize, height: iconSize, color: G },
             { type: 'text', text: strategyGroup, font: { size: size || 'headline', weight: __WT.bold }, textColor: C.text }
           ]
         },
@@ -414,15 +520,42 @@ async function __render(ctx) {
   }
 
   function badge(text, color) {
-    return {
+    const node = {
       type: 'stack',
       direction: 'row',
-      gap: 5,
+      padding: [2, 6, 2, 6],
+      borderRadius: 999,
       children: [
-        { type: 'image', src: 'sf-symbol:circle.fill', width: __SZ.dotPair, height: __SZ.dotPair, color: color },
         { type: 'text', text: text, font: { size: 'caption2', weight: __WT.bold }, textColor: color }
       ]
     };
+    if (/^#[0-9A-Fa-f]{6}$/.test(String(color))) node.backgroundColor = String(color) + '1F';
+    return node;
+  }
+
+  function smPill(text) {
+    return {
+      type: 'stack',
+      direction: 'row',
+      padding: [2, 4, 2, 4],
+      borderRadius: 999,
+      backgroundColor: G + '1F',
+      children: [{ type: 'text', text: text, font: { size: __SZ.smBadge, weight: __WT.bold }, textColor: G }]
+    };
+  }
+
+  function smBadge(text, color) {
+    const node = {
+      type: 'stack',
+      direction: 'row',
+      padding: [2, 4, 2, 4],
+      borderRadius: 999,
+      children: [
+        { type: 'text', text: text, font: { size: __SZ.smBadge, weight: __WT.bold }, textColor: color }
+      ]
+    };
+    if (/^#[0-9A-Fa-f]{6}$/.test(String(color))) node.backgroundColor = String(color) + '1F';
+    return node;
   }
 
   function barRow(node) {
@@ -445,12 +578,11 @@ async function __render(ctx) {
   const bcastKnown = !!(data && typeof data.isBroadcast === 'boolean');
 
   const networkText = resKnown ? (data.isResidential === true ? '住宅IP' : '机房IP') : __DASH;
-  const networkColor = resKnown ? (data.isResidential === true ? __GOOD : __WARN) : gray;
+  const networkColor = resKnown ? (data.isResidential === true ? G : W) : gray;
 
   const bcastText = bcastKnown ? (data.isBroadcast === true ? '广播IP' : '原生IP') : __DASH;
-  const bcastColor = bcastKnown ? (data.isBroadcast === true ? __WARN : __GOOD) : gray;
+  const bcastColor = bcastKnown ? (data.isBroadcast === true ? W : G) : gray;
 
-  const shortLocation = [data && data.country, data && data.city].filter(Boolean).join(' · ');
 
   const metaDead = dead || !data;
   const scoreDead = metaDead || riskScore === null;
@@ -460,14 +592,13 @@ async function __render(ctx) {
   const tScore = scoreDead ? __DASH : String(riskScore);
   const cScore = scoreDead ? gray : riskColor;
   const shownIp = data ? (hideIp ? __maskIp(data.ip) : data.ip) : null;
-  const tIp = metaDead ? __DASH : (shownIp || 'N/A');
+  const tIp = metaDead ? __DASH : (ipWide ? '255.255.255.255' : (shownIp || 'N/A'));
   const tCountry = metaDead ? __DASH : (data.country || 'Unknown');
   const tCity = metaDead ? __DASH : (data.city || 'Unknown');
-  const ispFor = (slot) => metaDead ? __DASH : (__ispText(data.asn, asnName || data.asOrganization, slot) || __DASH);
+  const ispFor = (slot, px) => metaDead ? __DASH : (__ispText(data.asn, asnName || data.asOrganization, slot, px) || __DASH);
   const tBcast = bcastDead ? __DASH : bcastText;
   const cBcast = bcastDead ? gray : bcastColor;
   const tLoc = metaDead ? __DASH : (__locTail(data.country, __locTail(data.region, data.city)) || 'Unknown');
-  const tLocShort = metaDead ? __DASH : (shortLocation || 'Unknown');
   const tNet = netDead ? __DASH : networkText;
   const cNet = netDead ? gray : networkColor;
   const tNetPair = tNet + ' · ' + (bcastDead ? __DASH : bcastText);
@@ -475,26 +606,60 @@ async function __render(ctx) {
     ? __DASH
     : ((data.countryCode || data.country || __DASH) + (data.city ? ' · ' + data.city : ''));
 
-  function netRow() {
+  diag.f = widgetFamily;
+  diag.g = strategyGroup;
+  diag.ip = (data && data.ip) ? String(data.ip) : '';
+  diag.ipOk = !dead;
+  diag.ipStatus = ipStatus;
+  diag.ipMs = ipMs;
+  diag.score = riskScore;
+  diag.res = (data && typeof data.isResidential === 'boolean') ? data.isResidential : null;
+  diag.bc = (data && typeof data.isBroadcast === 'boolean') ? data.isBroadcast : null;
+  diag.asn = (data && data.asn !== undefined) ? data.asn : null;
+  diag.org = (data && data.asOrganization) ? String(data.asOrganization) : '';
+  diag.asnName = asnName;
+  diag.asnRaw = asnRaw;
+  diag.asnHit = asnHit;
+  diag.keys = data ? Object.keys(data).join(',') : '';
+  diag.dual = dual;
+  diag.dualHit = dualHit;
+  diag.dualAge = dualAge;
+  diag.v4 = dv4;
+  diag.v6 = dv6;
+  diag.v6exit = isV6;
+
+  function dualBadge() {
     return {
       type: 'stack',
       direction: 'row',
-      gap: 10,
-      children: [
-        badge(tNet, cNet),
-        badge(tBcast, cBcast),
-        { type: 'spacer' },
-        {
-          type: 'text',
-          text: ispFor('net'),
-          font: { size: 'caption2', weight: __WT.semi },
-          textColor: metaDead ? gray : C.muted,
-          textAlign: 'right',
-          maxLines: 1,
-          minScale: 0.8
-        }
-      ]
+      gap: 4,
+      children: [badge('IPv4', G), badge('IPv6', G)]
     };
+  }
+
+  function netRow() {
+    const kids = [];
+    if (isV6) {
+      kids.push(dual ? dualBadge() : badge('IPv6 Network', G));
+    } else {
+      kids.push({
+        type: 'stack',
+        direction: 'row',
+        gap: 4,
+        children: [badge(tNet, cNet), badge(tBcast, cBcast)]
+      });
+    }
+    kids.push({ type: 'spacer' });
+    kids.push({
+      type: 'text',
+      text: ispFor('net'),
+      font: { size: 'caption2', weight: __WT.semi },
+      textColor: metaDead ? gray : C.muted,
+      textAlign: 'right',
+      maxLines: 1,
+      minScale: 0.8
+    });
+    return { type: 'stack', direction: 'row', gap: 8, children: kids };
   }
 
   function statusRow() {
@@ -503,7 +668,7 @@ async function __render(ctx) {
       direction: 'row',
       gap: 6,
       children: [
-        { type: 'image', src: 'sf-symbol:checkmark.circle.fill', width: 12, height: 12, color: dead ? gray : __GOOD },
+        { type: 'image', src: 'sf-symbol:checkmark.circle.fill', width: 12, height: 12, color: dead ? gray : G },
         { type: 'text', text: dead ? __DASH : 'Connection Active', font: { size: 'caption2' }, textColor: dead ? gray : C.secondary }
       ]
     };
@@ -513,7 +678,7 @@ async function __render(ctx) {
     return {
       type: 'widget',
       ...bg,
-      padding: 14,
+      padding: 12,
       gap: 12,
       children: [
         head,
@@ -529,7 +694,7 @@ async function __render(ctx) {
         netRow(),
         row('运营商', ispFor('large'), metaDead ? gray : C.text),
         row('位置', tLoc, metaDead ? gray : C.text),
-        row('风险系数', tScore, cScore),
+        row('风险系数', isV6 ? 'IPv4 Only' : tScore, isV6 ? C.muted : cScore),
         chartRow(slots, chartH, chartW),
         statusRow()
       ]
@@ -542,6 +707,7 @@ async function __render(ctx) {
       if (scoreDead) iconNode.color = gray;
       return iconNode;
     }
+    if (isV6) return { type: 'image', src: __RISK_ICONS.thinking, width: 40, height: 40 };
     return {
       type: 'widget',
       padding: 4,
@@ -554,17 +720,25 @@ async function __render(ctx) {
   }
 
   if (widgetFamily === 'accessoryRectangular') {
-    return {
-      type: 'widget',
-      padding: [0, 10],
-      gap: 0,
-      children: [
-        monoT(tIp, __SZ.rectIp, __WT.bold, metaDead ? __MONO.faint : __MONO.hi, { maxLines: 1, minScale: 0.75 }),
-        monoT(tCityCity, __SZ.rectSub, __WT.bold, metaDead ? __MONO.faint : __MONO.mid, { maxLines: 1 }),
-        monoT(ispFor('rect'), __SZ.rectSub, __WT.bold, metaDead ? __MONO.faint : __MONO.weak, { maxLines: 1 }),
-        monoT(tNetPair, __SZ.rectSub, __WT.med, (netDead || bcastDead) ? __MONO.faint : __MONO.weak, { maxLines: 1 })
-      ]
-    };
+    const kids = [];
+    const line = (txt, size, weight, op) => monoT(txt, size, weight, op, { maxLines: 1, minScale: 0.75 });
+    if (isV6) {
+      if (dual) {
+        kids.push(line(tCityCity, 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
+        kids.push(line(ispFor('rect', 12), 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
+        kids.push(line('IPv4 / IPv6', 10, __WT.med, __MONO.weak));
+      } else {
+        kids.push(line('IPv6 Network', 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
+        kids.push(line(tCityCity, 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
+        kids.push(line(ispFor('rect'), 10, __WT.med, __MONO.weak));
+      }
+    } else {
+      kids.push(line(tIp, 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
+      kids.push(line(tCityCity, 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
+      kids.push(line(ispFor('rect', 10), 10, __WT.med, metaDead ? __MONO.faint : __MONO.weak));
+      kids.push(line(tNetPair, 10, __WT.med, (netDead || bcastDead) ? __MONO.faint : __MONO.weak));
+    }
+    return { type: 'widget', padding: [4, 4, 4, 4], gap: 0, children: kids };
   }
 
   if (widgetFamily === 'accessoryInline') {
@@ -577,119 +751,174 @@ async function __render(ctx) {
   }
 
   if (widgetFamily === 'systemSmall') {
-    return {
-      type: 'widget',
-      ...bg,
-      padding: 14,
-      gap: 4,
-      children: [
-        {
-          type: 'stack',
-          direction: 'row',
-          gap: 6,
-          children: [
-            { type: 'image', src: 'sf-symbol:airplane', width: 14, height: 14, color: __GOOD },
-            { type: 'text', text: strategyGroup, font: { size: 'caption1', weight: __WT.bold }, textColor: C.text },
-            { type: 'spacer' },
-            { type: 'text', text: stamp, font: { size: 'caption1', weight: __WT.med }, textColor: C.muted }
-          ]
-        },
-        {
-          type: 'text',
-          text: tScore,
-          font: { size: __SZ.scoreSmall, weight: __WT.light },
-          textColor: cScore,
-          maxLines: 1,
-          minScale: 0.7
-        },
-        { type: 'spacer' },
-        barRow({
-          type: 'text',
-          text: tCity,
-          font: { size: __SZ.citySmall, weight: __WT.bold },
-          textColor: metaDead ? gray : C.text,
-          textAlign: 'right',
-          maxLines: 1,
-          minScale: 0.75
-        }),
-        barRow({
-          type: 'text',
-          text: tCountry,
-          font: { size: __SZ.countrySmall, weight: __WT.bold },
-          textColor: metaDead ? gray : C.text,
-          textAlign: 'right',
-          maxLines: 1,
-          minScale: 0.75
-        }),
-        barRow({
-          type: 'stack',
-          direction: 'row',
-          gap: 3,
-          children: [
-            { type: 'text', text: tNet, font: { size: __SZ.netSmall, weight: __WT.bold }, textColor: cNet },
-            { type: 'image', src: 'sf-symbol:circle.fill', width: __SZ.dotSep, height: __SZ.dotSep, color: gray },
-            { type: 'text', text: tBcast, font: { size: __SZ.netSmall, weight: __WT.bold }, textColor: cBcast }
-          ]
-        })
-      ]
-    };
+    const smV6 = String(tIp).indexOf(':') >= 0;
+    const smH = smV6 ? __CHART_H_SM_V6 : __CHART_H_SM;
+    const kids = [
+      header(14, 12),
+      { type: 'spacer' },
+      chartRow(6, smH, __CHART_W_SM, true),
+      { type: 'spacer' }
+    ];
+    if (smV6) {
+      const smRowF = (node) => ({ type: 'stack', direction: 'row', children: [node, { type: 'spacer' }] });
+      const smGroups = String(tIp).split(':').filter(function (g) { return g !== ''; });
+      const smIpCut = smGroups.length > 4
+        ? smGroups.slice(0, 2).join(':') + ' \u00b7 \u00b7 \u00b7 ' + smGroups.slice(-2).join(':')
+        : String(tIp);
+      const smIp = (String(tIp).length > 26 || __txtW(tIp, 12) > 132) ? smIpCut : String(tIp);
+      kids.push(smRowF({ type: 'text', text: smIp, font: { size: 12, weight: __WT.bold }, textColor: metaDead ? gray : C.text, maxLines: 1 }));
+      kids.push(smRowF({ type: 'text', text: tCountry, font: { size: 10, weight: __WT.med }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.75 }));
+      const smPillW = (__txtW('IPv4', __SZ.smBadge) + 8) * (dual ? 2 : 1) + (dual ? 4 : 0);
+      const smCityMax = 140 - smPillW - 6;
+      const smCityFit = smCityMax / 0.75;
+      let smCity = String(tCity);
+      if (__txtW(smCity, 10) > smCityFit) {
+        while (smCity.length > 1 && __txtW(smCity + '...', 10) > smCityFit) smCity = smCity.slice(0, -1);
+        smCity = smCity + '...';
+      }
+      kids.push({
+        type: 'stack',
+        direction: 'row',
+        gap: 6,
+        children: [
+          { type: 'text', text: smCity, font: { size: 10, weight: __WT.med }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.75 },
+          { type: 'spacer' },
+          { type: 'stack', direction: 'row', gap: 4, children: dual ? [smPill('IPv4'), smPill('IPv6')] : [smPill('IPv6')] }
+        ]
+      });
+    } else {
+      const smLeft = Math.max(84, Math.min(100, Math.round(140 - 8 - __txtW(tScore, 32))));
+      const smRow = (node) => ({ type: 'stack', direction: 'row', width: smLeft, children: [node, { type: 'spacer' }] });
+      kids.push({
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'end',
+        gap: 8,
+        children: [
+          {
+            type: 'stack',
+            direction: 'column',
+            width: smLeft,
+            gap: 0,
+            children: [
+              smRow({ type: 'text', text: tIp, font: { size: 12, weight: __WT.bold }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.6 }),
+              smRow({ type: 'text', text: tCountry, font: { size: 10, weight: __WT.med }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.75 }),
+              smRow({
+                type: 'stack',
+                direction: 'row',
+                padding: [2, 0, 0, 0],
+                children: [{
+                  type: 'stack',
+                  direction: 'row',
+                  gap: 4,
+                  children: [smBadge(tNet, cNet), smBadge(tBcast, cBcast)]
+                }]
+              })
+            ]
+          },
+          { type: 'spacer' },
+          { type: 'text', text: tScore, font: { size: 32, weight: __WT.light }, textColor: cScore, maxLines: 1, minScale: 0.7 }
+        ]
+      });
+    }
+    return { type: 'widget', ...bg, padding: 12, gap: 2, children: kids };
   }
 
   if (widgetFamily === 'systemMedium') {
+    const midV6 = String(tIp).indexOf(':') >= 0;
+    const midH = midV6 ? __CHART_H_MID_V6 : __CHART_H_MID;
+    const midHeader = header(16, 14);
+    const midLoc = {
+      type: 'text',
+      text: tLoc,
+      font: { size: 10, weight: __WT.med },
+      textColor: metaDead ? gray : C.text,
+      maxLines: 1,
+      minScale: 0.8
+    };
+
+    if (midV6) {
+      const midPill = (t) => ({
+        type: 'stack',
+        direction: 'row',
+        padding: [2, 8, 2, 8],
+        borderRadius: 999,
+        backgroundColor: G + '1F',
+        children: [{ type: 'text', text: t, font: { size: 10, weight: __WT.bold }, textColor: G }]
+      });
+      const midDual = {
+        type: 'stack',
+        direction: 'row',
+        gap: 4,
+        children: [midPill('IPv4'), midPill('IPv6')]
+      };
+      const midNet = midPill('IPv6 Network');
+      return {
+        type: 'widget',
+        ...bg,
+        padding: [12, 12, 12, 12],
+        gap: 2,
+        children: [
+          midHeader,
+          { type: 'spacer' },
+          chartRow(12, midH, __CHART_W_MID, true),
+          { type: 'spacer' },
+          {
+            type: 'stack',
+            direction: 'row',
+            children: [{
+              type: 'text',
+              text: tIp,
+              font: { size: 16, weight: __WT.bold },
+              textColor: metaDead ? gray : C.text,
+              maxLines: 1,
+              minScale: 0.9
+            }]
+          },
+          { type: 'stack', direction: 'row', children: [midLoc, { type: 'spacer' }, dual ? midDual : midNet] }
+        ]
+      };
+    }
+
     return {
       type: 'widget',
       ...bg,
-      padding: [10, 14, 10, 14],
-      gap: 6,
+      padding: [12, 12, 12, 12],
+      gap: 2,
       children: [
-        header(16, 15),
-        {
-          type: 'text',
-          text: tIp,
-          font: { size: 24, weight: __WT.bold },
-          textColor: metaDead ? gray : C.text,
-          maxLines: 1,
-          minScale: 0.6
-        },
+        midHeader,
+        { type: 'spacer' },
+        chartRow(12, midH, __CHART_W_MID, true),
+        { type: 'spacer' },
         {
           type: 'stack',
           direction: 'row',
           children: [
             {
               type: 'text',
-              text: tLocShort,
-              font: { size: 'caption2', weight: __WT.semi },
+              text: tIp,
+              font: { size: 24, weight: __WT.bold },
               textColor: metaDead ? gray : C.text,
               maxLines: 1,
-              minScale: 0.8
+              minScale: 0.7
             },
             { type: 'spacer' },
-            {
-              type: 'text',
-              text: ispFor('mid'),
-              font: { size: 'caption2', weight: __WT.semi },
-              textColor: metaDead ? gray : C.muted,
-              textAlign: 'right',
-              maxLines: 1,
-              minScale: 0.8
-            }
+            { type: 'text', text: tScore, font: { size: 20, weight: __WT.bold }, textColor: cScore }
           ]
         },
-        chartRow(12, __CHART_H_MID, __CHART_W_MID),
         {
           type: 'stack',
           direction: 'row',
-          gap: 10,
+          gap: 8,
           children: [
+            midLoc,
+            { type: 'spacer' },
             {
               type: 'stack',
               direction: 'row',
-              gap: 10,
-              padding: [6, 0, 0, 0],
-              children: [badge(tNet, cNet), badge(tBcast, cBcast)]
-            },
-            { type: 'spacer' },
-            { type: 'text', text: tScore, font: { size: 'title3', weight: __WT.bold }, textColor: cScore }
+              gap: 4,
+              children: [miniBadge(tNet, cNet), miniBadge(tBcast, cBcast)]
+            }
           ]
         }
       ]
@@ -700,9 +929,20 @@ async function __render(ctx) {
     return detailBody(header(20), 36, 24, __CHART_H_XL, __CHART_W_XL);
   }
 
-  return detailBody(header(18, 15), 32, 12, __CHART_H_LARGE, __CHART_W_LARGE);
+  return detailBody(header(18, 16), 32, 12, __CHART_H_LARGE, __CHART_W_LARGE);
+}
+
+async function __pushDbg(ctx, payload) {
+  if (!__DBG_URL) return;
+  try {
+    const url = __DBG_URL + '?tag=' + __DBG_TAG + '&t=' + Date.now() + '&d=' + encodeURIComponent(JSON.stringify(payload));
+    await ctx.http.get(url, { policy: 'DIRECT', timeout: 2000 });
+  } catch (_) {}
 }
 
 export default async function (ctx) {
-  return __render(ctx);
+  const diag = {};
+  const tree = await __render(ctx, diag);
+  await __pushDbg(ctx, diag);
+  return tree;
 }
