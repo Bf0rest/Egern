@@ -19,13 +19,6 @@ const __ASN_MAX = 32;
 
 const __D_V4 = 'https://1.1.1.1/cdn-cgi/trace';
 const __D_V6 = 'https://[2606:4700:4700::1111]/cdn-cgi/trace';
-const __DUAL_OK_TTL = 24 * 3600000;
-const __DUAL_BAD_TTL = 20 * 60 * 1000;
-const __DUAL_KEY = 'ippure_dual';
-const __DUAL_MAX = 8;
-
-const __DBG_URL = '';
-const __DBG_TAG = 'linkprobe';
 
 const __CHART_KEY = 'ippure_chart';
 const __CHART_MAX = 40;
@@ -36,8 +29,8 @@ const __CHART_R_SOLID = 3;
 const __CHART_DUAL_MIN_DIFF = 20;
 const __CHART_BACK_OP = 0.2;
 const __CHART_BAR = {
-  dark: { bottom: '#0B5F45', top: '#00F0A0' },
-  light: { bottom: '#0066CC', top: '#64B5FF' }
+  dark: '#34D399',
+  light: '#0071E3'
 };
 
 const __CHART_W_SM = 134;
@@ -210,6 +203,13 @@ function __maskIp(ip) {
   return s;
 }
 
+function __traceIp(p) {
+  if (!p || !p.ok || !p.text) return null;
+  const m = /(?:^|\n)ip=([^\n\r]+)/.exec(String(p.text));
+  const v = m ? m[1].trim() : '';
+  return /^[0-9a-fA-F:.]+$/.test(v) && v.length >= 3 ? v : null;
+}
+
 function __r2(n) {
   return String(Math.round(n * 100) / 100);
 }
@@ -224,12 +224,11 @@ const __RISK_ICONS = {
 };
 
 
-async function __render(ctx, diag) {
+async function __render(ctx) {
   const strategyGroup = ctx.env.GROUP || 'DIRECT';
   const widgetFamily = ctx.widgetFamily || 'systemLarge';
   const hideIp = __wantHideIp(ctx.env.IP);
   const ipWide = String(ctx.env.IP || '').trim() === '测试';
-  if (!diag || typeof diag !== 'object') diag = {};
   let ipStatus = 0;
   let ipMs = null;
 
@@ -336,31 +335,13 @@ async function __render(ctx, diag) {
   const data = await scoreTask;
   const dead = !data;
 
-  const isV6 = !!(data && typeof data.ip === 'string' && data.ip.indexOf(':') >= 0);
-  let dual = false;
-  let dualHit = null;
-  let dualAge = null;
-  let dv4 = null;
-  let dv6 = null;
-  if (isV6 && !dead && data && data.ip) {
-    const dualOk = (e) => typeof e.d === 'boolean' && (now - e.ts) < (e.d === true ? __DUAL_OK_TTL : __DUAL_BAD_TTL);
-    const hit = kvRead(__DUAL_KEY, __DUAL_MAX, dualOk)[data.ip];
-    if (hit) {
-      dual = hit.d;
-      dualHit = true;
-      dualAge = now - hit.ts;
-    } else {
-      dualHit = false;
-      const pair = await Promise.all([
-        probeOnce(__D_V4, strategyGroup, __TM_TIMEOUT),
-        probeOnce(__D_V6, strategyGroup, __TM_TIMEOUT)
-      ]);
-      dv4 = { ok: !!(pair[0] && pair[0].ok), s: (pair[0] && pair[0].status) || 0, ms: (pair[0] && pair[0].ms) || 0 };
-      dv6 = { ok: !!(pair[1] && pair[1].ok), s: (pair[1] && pair[1].status) || 0, ms: (pair[1] && pair[1].ms) || 0 };
-      dual = !!(dv4.ok && dv6.ok);
-      kvPut(__DUAL_KEY, data.ip, { d: dual, ts: now }, __DUAL_MAX, dualOk);
-    }
+  let fbIp = null;
+  if (dead) {
+    fbIp = __traceIp(await probeOnce(__D_V4, strategyGroup, __TM_TIMEOUT));
+    if (!fbIp) fbIp = __traceIp(await probeOnce(__D_V6, strategyGroup, __TM_TIMEOUT));
   }
+  const addr = (data && typeof data.ip === 'string') ? data.ip : fbIp;
+  const isV6 = !!(typeof addr === 'string' && addr.indexOf(':') >= 0);
 
   const chartBar = isLight ? __CHART_BAR.light : __CHART_BAR.dark;
   const sample = (chartMs === null) ? null : { lo: Math.round(chartMs), hi: Math.round(chartHi === null ? chartMs : chartHi) };
@@ -393,18 +374,14 @@ async function __render(ctx, diag) {
       if (hi - v.lo >= __CHART_DUAL_MIN_DIFF) {
         const hh = Math.max(__CHART_MIN_H, Math.max(0, Math.min(1, hi / __CHART_CAP)) * h);
         back.push("<rect x='" + x + "' y='" + __r2(h - hh) + "' width='" + __r2(bar) + "' height='" + __r2(hh)
-          + "' rx='" + __r2(Math.min(__CHART_R_SOLID, hh / 2)) + "' fill='" + chartBar.top + "'/>");
+          + "' rx='" + __r2(Math.min(__CHART_R_SOLID, hh / 2)) + "' fill='" + chartBar + "'/>");
       }
       const bh = Math.max(__CHART_MIN_H, Math.max(0, Math.min(1, v.lo / __CHART_CAP)) * h);
       body.push("<rect x='" + x + "' y='" + __r2(h - bh) + "' width='" + __r2(bar) + "' height='" + __r2(bh)
-        + "' rx='" + __r2(Math.min(__CHART_R_SOLID, bh / 2)) + "' fill='url(#g)'/>");
+        + "' rx='" + __r2(Math.min(__CHART_R_SOLID, bh / 2)) + "' fill='" + chartBar + "'/>");
     }
     const backLayer = back.length ? "<g opacity='" + __CHART_BACK_OP + "'>" + back.join('') + "</g>" : '';
     return "<svg xmlns='http://www.w3.org/2000/svg' width='" + __r2(w) + "' height='" + __r2(h) + "' viewBox='0 0 " + __r2(w) + " " + __r2(h) + "'>"
-      + "<defs><linearGradient id='g' x1='0' y1='1' x2='0' y2='0'>"
-      + "<stop offset='0' stop-color='" + chartBar.bottom + "'/>"
-      + "<stop offset='1' stop-color='" + chartBar.top + "'/>"
-      + "</linearGradient></defs>"
       + backLayer + body.join('') + '</svg>';
   }
 
@@ -589,10 +566,12 @@ async function __render(ctx, diag) {
   const netDead = metaDead || !resKnown;
   const bcastDead = metaDead || !bcastKnown;
 
-  const tScore = scoreDead ? __DASH : String(riskScore);
+  const tScore = scoreDead ? (dead && addr ? 'N/A' : __DASH) : String(riskScore);
   const cScore = scoreDead ? gray : riskColor;
-  const shownIp = data ? (hideIp ? __maskIp(data.ip) : data.ip) : null;
-  const tIp = metaDead ? __DASH : (ipWide ? '255.255.255.255' : (shownIp || 'N/A'));
+  const shownIp = addr ? (hideIp ? __maskIp(addr) : addr) : null;
+  const tIp = ipWide ? '255.255.255.255' : (shownIp || __DASH);
+  const ipColor = (metaDead && !addr) ? gray : C.text;
+  const ipOp = (metaDead && !addr) ? __MONO.faint : __MONO.hi;
   const tCountry = metaDead ? __DASH : (data.country || 'Unknown');
   const tCity = metaDead ? __DASH : (data.city || 'Unknown');
   const ispFor = (slot, px) => metaDead ? __DASH : (__ispText(data.asn, asnName || data.asOrganization, slot, px) || __DASH);
@@ -606,41 +585,11 @@ async function __render(ctx, diag) {
     ? __DASH
     : ((data.countryCode || data.country || __DASH) + (data.city ? ' · ' + data.city : ''));
 
-  diag.f = widgetFamily;
-  diag.g = strategyGroup;
-  diag.ip = (data && data.ip) ? String(data.ip) : '';
-  diag.ipOk = !dead;
-  diag.ipStatus = ipStatus;
-  diag.ipMs = ipMs;
-  diag.score = riskScore;
-  diag.res = (data && typeof data.isResidential === 'boolean') ? data.isResidential : null;
-  diag.bc = (data && typeof data.isBroadcast === 'boolean') ? data.isBroadcast : null;
-  diag.asn = (data && data.asn !== undefined) ? data.asn : null;
-  diag.org = (data && data.asOrganization) ? String(data.asOrganization) : '';
-  diag.asnName = asnName;
-  diag.asnRaw = asnRaw;
-  diag.asnHit = asnHit;
-  diag.keys = data ? Object.keys(data).join(',') : '';
-  diag.dual = dual;
-  diag.dualHit = dualHit;
-  diag.dualAge = dualAge;
-  diag.v4 = dv4;
-  diag.v6 = dv6;
-  diag.v6exit = isV6;
-
-  function dualBadge() {
-    return {
-      type: 'stack',
-      direction: 'row',
-      gap: 4,
-      children: [badge('IPv4', G), badge('IPv6', G)]
-    };
-  }
 
   function netRow() {
     const kids = [];
     if (isV6) {
-      kids.push(dual ? dualBadge() : badge('IPv6 Network', G));
+      kids.push(badge('IPv6 Network', G));
     } else {
       kids.push({
         type: 'stack',
@@ -668,8 +617,8 @@ async function __render(ctx, diag) {
       direction: 'row',
       gap: 6,
       children: [
-        { type: 'image', src: 'sf-symbol:checkmark.circle.fill', width: 12, height: 12, color: dead ? gray : G },
-        { type: 'text', text: dead ? __DASH : 'Connection Active', font: { size: 'caption2' }, textColor: dead ? gray : C.secondary }
+        { type: 'image', src: 'sf-symbol:' + (dead ? 'questionmark.circle.fill' : 'checkmark.circle.fill'), width: 12, height: 12, color: dead ? gray : G },
+        { type: 'text', text: dead ? (addr ? '取数失败' : __DASH) : 'Connection Active', font: { size: 'caption2' }, textColor: dead ? gray : C.secondary }
       ]
     };
   }
@@ -687,7 +636,7 @@ async function __render(ctx, diag) {
           type: 'text',
           text: tIp,
           font: { size: ipSize, weight: __WT.bold },
-          textColor: metaDead ? gray : C.text,
+          textColor: ipColor,
           maxLines: 1,
           minScale: 0.6
         },
@@ -723,17 +672,11 @@ async function __render(ctx, diag) {
     const kids = [];
     const line = (txt, size, weight, op) => monoT(txt, size, weight, op, { maxLines: 1, minScale: 0.75 });
     if (isV6) {
-      if (dual) {
-        kids.push(line(tCityCity, 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
-        kids.push(line(ispFor('rect', 12), 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
-        kids.push(line('IPv4 / IPv6', 10, __WT.med, __MONO.weak));
-      } else {
-        kids.push(line('IPv6 Network', 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
-        kids.push(line(tCityCity, 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
-        kids.push(line(ispFor('rect'), 10, __WT.med, __MONO.weak));
-      }
+      kids.push(line('IPv6 Network', 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
+      kids.push(line(tCityCity, 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
+      kids.push(line(ispFor('rect'), 10, __WT.med, __MONO.weak));
     } else {
-      kids.push(line(tIp, 16, __WT.bold, metaDead ? __MONO.faint : __MONO.hi));
+      kids.push(line(tIp, 16, __WT.bold, ipOp));
       kids.push(line(tCityCity, 12, __WT.bold, metaDead ? __MONO.faint : __MONO.mid));
       kids.push(line(ispFor('rect', 10), 10, __WT.med, metaDead ? __MONO.faint : __MONO.weak));
       kids.push(line(tNetPair, 10, __WT.med, (netDead || bcastDead) ? __MONO.faint : __MONO.weak));
@@ -766,9 +709,9 @@ async function __render(ctx, diag) {
         ? smGroups.slice(0, 2).join(':') + ' \u00b7 \u00b7 \u00b7 ' + smGroups.slice(-2).join(':')
         : String(tIp);
       const smIp = (String(tIp).length > 26 || __txtW(tIp, 12) > 132) ? smIpCut : String(tIp);
-      kids.push(smRowF({ type: 'text', text: smIp, font: { size: 12, weight: __WT.bold }, textColor: metaDead ? gray : C.text, maxLines: 1 }));
+      kids.push(smRowF({ type: 'text', text: smIp, font: { size: 12, weight: __WT.bold }, textColor: ipColor, maxLines: 1 }));
       kids.push(smRowF({ type: 'text', text: tCountry, font: { size: 10, weight: __WT.med }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.75 }));
-      const smPillW = (__txtW('IPv4', __SZ.smBadge) + 8) * (dual ? 2 : 1) + (dual ? 4 : 0);
+      const smPillW = __txtW('IPv6 Network', __SZ.smBadge) + 8;
       const smCityMax = 140 - smPillW - 6;
       const smCityFit = smCityMax / 0.75;
       let smCity = String(tCity);
@@ -783,7 +726,7 @@ async function __render(ctx, diag) {
         children: [
           { type: 'text', text: smCity, font: { size: 10, weight: __WT.med }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.75 },
           { type: 'spacer' },
-          { type: 'stack', direction: 'row', gap: 4, children: dual ? [smPill('IPv4'), smPill('IPv6')] : [smPill('IPv6')] }
+          { type: 'stack', direction: 'row', gap: 4, children: [smPill('IPv6')] }
         ]
       });
     } else {
@@ -801,7 +744,7 @@ async function __render(ctx, diag) {
             width: smLeft,
             gap: 0,
             children: [
-              smRow({ type: 'text', text: tIp, font: { size: 12, weight: __WT.bold }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.6 }),
+              smRow({ type: 'text', text: tIp, font: { size: 12, weight: __WT.bold }, textColor: ipColor, maxLines: 1, minScale: 0.6 }),
               smRow({ type: 'text', text: tCountry, font: { size: 10, weight: __WT.med }, textColor: metaDead ? gray : C.text, maxLines: 1, minScale: 0.75 }),
               smRow({
                 type: 'stack',
@@ -846,12 +789,6 @@ async function __render(ctx, diag) {
         backgroundColor: G + '1F',
         children: [{ type: 'text', text: t, font: { size: 10, weight: __WT.bold }, textColor: G }]
       });
-      const midDual = {
-        type: 'stack',
-        direction: 'row',
-        gap: 4,
-        children: [midPill('IPv4'), midPill('IPv6')]
-      };
       const midNet = midPill('IPv6 Network');
       return {
         type: 'widget',
@@ -870,12 +807,12 @@ async function __render(ctx, diag) {
               type: 'text',
               text: tIp,
               font: { size: 16, weight: __WT.bold },
-              textColor: metaDead ? gray : C.text,
+              textColor: ipColor,
               maxLines: 1,
               minScale: 0.9
             }]
           },
-          { type: 'stack', direction: 'row', children: [midLoc, { type: 'spacer' }, dual ? midDual : midNet] }
+          { type: 'stack', direction: 'row', children: [midLoc, { type: 'spacer' }, midNet] }
         ]
       };
     }
@@ -898,7 +835,7 @@ async function __render(ctx, diag) {
               type: 'text',
               text: tIp,
               font: { size: 24, weight: __WT.bold },
-              textColor: metaDead ? gray : C.text,
+              textColor: ipColor,
               maxLines: 1,
               minScale: 0.7
             },
@@ -932,17 +869,7 @@ async function __render(ctx, diag) {
   return detailBody(header(18, 16), 32, 12, __CHART_H_LARGE, __CHART_W_LARGE);
 }
 
-async function __pushDbg(ctx, payload) {
-  if (!__DBG_URL) return;
-  try {
-    const url = __DBG_URL + '?tag=' + __DBG_TAG + '&t=' + Date.now() + '&d=' + encodeURIComponent(JSON.stringify(payload));
-    await ctx.http.get(url, { policy: 'DIRECT', timeout: 2000 });
-  } catch (_) {}
-}
 
 export default async function (ctx) {
-  const diag = {};
-  const tree = await __render(ctx, diag);
-  await __pushDbg(ctx, diag);
-  return tree;
+  return await __render(ctx);
 }

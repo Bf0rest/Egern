@@ -1,6 +1,15 @@
 name: IPPure-emoji
 description: 代理出口风险评分 + 机房/住宅与原生/广播判定，深/浅配色。
 
+real_ip_domains:
+- my.ippure.com
+
+dns:
+  hosts:
+    my.ippure.com:
+    - 104.21.79.4
+    - 172.67.139.58
+
 env_schema:
   GROUP:
     name: 策略组
